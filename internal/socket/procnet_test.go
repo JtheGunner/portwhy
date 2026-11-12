@@ -17,7 +17,7 @@ func openFixture(t *testing.T, name string) *os.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { f.Close() })
+	t.Cleanup(func() { _ = f.Close() })
 	return f
 }
 
@@ -176,7 +176,7 @@ func TestCollector_UnreadableFDDirGivesPIDZero(t *testing.T) {
 	if err := os.Chmod(fdDir, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(fdDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(fdDir, 0o755) })
 
 	got, err := newProcCollector(root).Sockets(context.Background())
 	if err != nil {

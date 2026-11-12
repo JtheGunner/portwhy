@@ -259,7 +259,7 @@ func (c *procCollector) readTable(table procTable) ([]rawSocket, error) {
 		}
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	rows, err := parseProcNet(f, table.proto, table.v6)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
