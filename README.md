@@ -51,38 +51,58 @@ portwhy 3000 5432        # several ports in detail
 portwhy 3000 --kill      # explain, then stop the cause after confirmation
 ```
 
-Without arguments, and for ranges, portwhy prints an overview: busy sockets grouped by the service or process that owns them, with the ports of one owner on a single line. Free ports are left out.
+Without arguments, and for ranges, portwhy prints a compact table: one row per service or process, with its ports, protocol, bind address and owner. Free ports are left out. `⚠` marks sockets reachable from the network, and a summary line counts busy ports, services and hidden owners.
 
 ```text
 $ portwhy
-Spotify
-  1900, 5353          udp  0.0.0.0    !  PID 13250
-node
-  3000, 3100, 3306    tcp  127.0.0.1     PID 3983
-Docker container "db" (postgres:16)
-  5432                tcp  0.0.0.0    !  postgres (PID 812)
-Homebrew service "php@8.4"
-  9000                tcp  127.0.0.1     php-fpm (PID 3884) +2 more
-+ 2 sockets with hidden owner (22, 88). Run with sudo.
-! reachable from the network (bound to all interfaces)
-Details: portwhy 1900
-Sources: docker (1) · launchd (1) · process (2) — filter with --source <name>
+     Service / process                    Ports                   Proto  Bind       Owner
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠  Spotify                              1900, 5353              udp    0.0.0.0    PID 13250
+     Antigravity                          3000, 3100, 3306, 3890  tcp    127.0.0.1  PID 3983
+  ⚠  Docker container "db" (postgres:16)  5432                    tcp    0.0.0.0    postgres (PID 812)
+     Homebrew service "php@8.4"           9000                    tcp    127.0.0.1  php-fpm (PID 3884) +2 more
+  ⚠  Owner not visible                    22, 88, 137, 138, 445   tcp    0.0.0.0    run with sudo
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  13 busy ports · 4 services · ⚠ 8 reachable from the network · 5 ports with hidden owner
+  ℹ  Details: portwhy 1900    Airy view: --expanded    Filter: --source docker|launchd|process
 ```
 
-The all-ports overview ends with a line that names the sources currently in use, so you can see what to filter by. `--source` accepts `docker`, `systemd`, `launchd` and `process` (a plain process without a service). Repeat the flag or separate values with commas to combine them. With `--kill`, the filter also limits which ports are stopped.
+Add `--expanded` for an airier layout with a titled rule per service, one row per port and a summary box. It suits a short list better than a busy machine.
+
+```text
+$ portwhy --expanded
+──────────────────────────────────────── Spotify · 2 ports ─────────────────────────────────────────
+
+  ⚠  1900  udp  0.0.0.0    PID 13250
+  ⚠  5353  udp  0.0.0.0    PID 13250
+```
+
+The hint under the all-ports overview names the sources currently in use, so you can see what to filter by. `--source` accepts `docker`, `systemd`, `launchd` and `process` (a plain process without a service). Repeat the flag or separate values with commas to combine them. With `--kill`, the filter also limits which ports are stopped.
 
 A named port gets a detailed block that names the service, lists its facts and shows how it would be stopped. A free port says so:
 
 ```text
-$ portwhy 9000 59999
-:9000  TCP 127.0.0.1  Homebrew service "php@8.4"
-       Process  php-fpm (PID 3884) +2 more
-       Facts    Label homebrew.mxcl.php@8.4 · Uptime 6d 2h
-       Stop     brew services stop php@8.4
-:59999  free
+$ portwhy 9000 3000
+───────────────────── :9000 · Homebrew service "php@8.4" ─────────────────────
+
+  ℹ  tcp 0.0.0.0
+
+     Process  php-fpm (PID 3884) +2 more
+     Uptime   3d 0h
+     Label    homebrew.mxcl.php@8.4
+
+  →  Stop     brew services stop php@8.4
+
+  ⚠  Reachable from the network (bound to all interfaces).
+
+─────────────────────────────────── :3000 ────────────────────────────────────
+
+  ✓  free
 ```
 
-Several processes of one service on the same port (a master and its workers) share one block. On a terminal, long values such as the command line are shortened to the terminal width; piped output is never shortened. Use `--wide` to keep long lines on a terminal as well.
+Several processes of one service on the same port (a master and its workers) share one block. On a terminal, lines fit the terminal width, capped at 100 columns, and a long command wraps over at most three lines. Piped output uses 78 columns and is never shortened. Use `--wide` to use the full terminal width and keep long values intact. Terminals without Unicode support (`TERM=dumb` or a non-UTF-8 locale) get plain ASCII symbols and lines.
+
+With `--kill`, every port gets a status line (`✓` stopped, `ℹ` left untouched, `⚠` failed) on stderr, followed by a `Result` box.
 
 > [!TIP]
 > Add `--dry-run` to `--kill` to see exactly what would be executed without stopping anything.
@@ -100,7 +120,8 @@ Several processes of one service on the same port (a master and its workers) sha
 | 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
 | 🎨 | `--no-color` | disable coloured output (`NO_COLOR`, `TERM=dumb` and non-TTY output are honoured too) |
-| ↔️ | `--wide` | do not shorten long lines to the terminal width |
+| 🪟 | `--expanded` | show the overview of all ports in the airy layout, one row per port |
+| ↔️ | `--wide` | use the full terminal width and keep long values intact |
 | 🏷️ | `-v`, `--version` | print the version |
 
 ---
