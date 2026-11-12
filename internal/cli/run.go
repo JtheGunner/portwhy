@@ -32,6 +32,8 @@ type Flags struct {
 	Force   bool
 	DryRun  bool
 	Wide    bool
+	// Expanded switches the overview of all ports to the airy layout.
+	Expanded bool
 	// Source limits the listing, and with Kill the stop, to ports whose owner
 	// is one of these sources (docker, systemd, launchd, process).
 	Source []string
@@ -86,11 +88,23 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 	}
 	check := portFree(d.Sockets)
 	done := make(map[string]bool)
+	ropts := textOptions(d, nil, flags, nil)
+	ropts.Colors = render.NewColors(d.StderrIsTTY, flags.NoColor)
+	counts := map[render.KillOutcome]int{}
+	line := func(o render.KillOutcome, port uint16, detail string) {
+		counts[o]++
+		_, _ = fmt.Fprintln(d.Stderr, render.KillLine(o, port, detail, ropts))
+	}
+	defer func() {
+		if !flags.DryRun && len(counts) > 0 {
+			_, _ = fmt.Fprintln(d.Stderr, render.KillSummary(counts, ropts))
+		}
+	}()
 
 	for _, r := range reports {
 		for _, f := range r.Findings {
 			if f.Explanation.Terminator == nil {
-				_, _ = fmt.Fprintf(d.Stderr, "portwhy: cannot stop port %d: the owning process is not visible; try again with sudo\n", r.Port)
+				line(render.KillFailed, r.Port, "cannot stop it: the owning process is not visible; try again with sudo")
 				failed = true
 				continue
 			}
@@ -105,12 +119,12 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 			switch {
 			case err == nil:
 				if !flags.DryRun {
-					_, _ = fmt.Fprintf(d.Stderr, "Port %d is free.\n", r.Port)
+					line(render.KillStopped, r.Port, "")
 				}
 			case errors.Is(err, kill.ErrDeclined):
-				_, _ = fmt.Fprintf(d.Stderr, "Port %d left untouched.\n", r.Port)
+				line(render.KillDeclined, r.Port, "")
 			default:
-				_, _ = fmt.Fprintf(d.Stderr, "portwhy: port %d: %v\n", r.Port, err)
+				line(render.KillFailed, r.Port, err.Error())
 				failed = true
 			}
 		}
@@ -156,6 +170,7 @@ func textOptions(d Deps, args []string, flags Flags, available []report.SourceCo
 		Wide:     flags.Wide,
 		Overview: overviewMode(args, flags.Kill),
 		ASCII:    d.ASCII,
+		Expanded: flags.Expanded,
 	}
 	if len(args) == 0 {
 		opts.Sources = available

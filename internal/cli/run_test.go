@@ -620,3 +620,68 @@ func TestRootCmd_WideFlagIsParsed(t *testing.T) {
 		t.Errorf("stdout = %q, want the full command with --wide", stdout.String())
 	}
 }
+
+func TestRun_KillReportsStatusLinesAndAResultBox(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "kill -TERM 42", onTerm: func() { c.freed = true }}
+	d, stderr := killDeps(ft, c)
+
+	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	for _, want := range []string{"✓  Port 3000 is free.", " Result ", "Stopped"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("%q missing from stderr:\n%s", want, stderr.String())
+		}
+	}
+	if strings.Contains(stderr.String(), "\x1b") {
+		t.Errorf("escape sequence although stderr is not a terminal: %q", stderr.String())
+	}
+}
+
+func TestRun_KillDeclinedShowsLeftUntouched(t *testing.T) {
+	d, stderr := killDeps(&fakeTerminator{describe: "x"}, &freeingSockets{})
+	d.IsTTY, d.StdinIsTTY = true, true
+	d.Stdin = strings.NewReader("n\n")
+
+	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true})
+
+	if !strings.Contains(stderr.String(), "Port 3000 left untouched.") || !strings.Contains(stderr.String(), "Left untouched") {
+		t.Errorf("declined run not reported:\n%s", stderr.String())
+	}
+}
+
+func TestRun_KillDryRunPrintsNoResultBox(t *testing.T) {
+	d, stderr := killDeps(&fakeTerminator{describe: "kill -TERM 42"}, &freeingSockets{})
+
+	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, DryRun: true})
+
+	if strings.Contains(stderr.String(), "Result") {
+		t.Errorf("a dry run must not claim a result:\n%s", stderr.String())
+	}
+}
+
+func TestRun_ExpandedSwitchesTheOverviewLayout(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	Run(context.Background(), d, nil, Flags{})
+	compact := stdout.String()
+
+	d, stdout, _ = testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	Run(context.Background(), d, nil, Flags{Expanded: true})
+
+	if !strings.Contains(stdout.String(), " Summary ") || strings.Contains(compact, " Summary ") {
+		t.Errorf("--expanded should add the summary box only in the airy layout\ncompact:\n%s\nexpanded:\n%s", compact, stdout.String())
+	}
+}
+
+func TestRootCmd_ExpandedFlagIsParsed(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	cmd, _ := newRootCmd(d)
+	cmd.SetArgs([]string{"--expanded"})
+
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), " Summary ") {
+		t.Errorf("--expanded not applied:\n%s", stdout.String())
+	}
+}
