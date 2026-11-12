@@ -11,6 +11,8 @@ const (
 	ansiGreen  = "\x1b[32m"
 	ansiYellow = "\x1b[33m"
 	ansiCyan   = "\x1b[36m"
+	ansiBold   = "\x1b[1m"
+	ansiDim    = "\x1b[2m"
 )
 
 // Colors decides whether ANSI colour sequences are written.
@@ -18,14 +20,20 @@ type Colors struct {
 	Enabled bool
 }
 
-// ColorsFor returns the colour setting for w. Colours are disabled when
-// noColorFlag is set, when the NO_COLOR environment variable is set to a
-// non-empty value, or when w is not a terminal.
-func ColorsFor(w io.Writer, noColorFlag bool) Colors {
-	if noColorFlag || os.Getenv("NO_COLOR") != "" {
+// NewColors returns the colour setting for a stream. Colours are disabled
+// when the stream is not a terminal, when noColorFlag is set, when the
+// NO_COLOR environment variable is set to a non-empty value, or when TERM is
+// "dumb".
+func NewColors(isTTY, noColorFlag bool) Colors {
+	if !isTTY || noColorFlag || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		return Colors{}
 	}
-	return Colors{Enabled: isTerminal(w)}
+	return Colors{Enabled: true}
+}
+
+// ColorsFor returns the colour setting for w; see NewColors.
+func ColorsFor(w io.Writer, noColorFlag bool) Colors {
+	return NewColors(isTerminal(w), noColorFlag)
 }
 
 // isTerminal reports whether w is a character device such as a TTY.
@@ -47,3 +55,7 @@ func (c Colors) paint(code, s string) string {
 	}
 	return code + s + ansiReset
 }
+
+func (c Colors) bold(s string) string { return c.paint(ansiBold, s) }
+
+func (c Colors) dim(s string) string { return c.paint(ansiDim, s) }
