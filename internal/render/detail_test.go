@@ -230,3 +230,18 @@ func TestText_DetailLongHeadlineAndProcessNameFitTheWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestText_DetailOwnerNotVisibleAppearsOnce(t *testing.T) {
+	r := report.PortReport{
+		Port: 8080,
+		Findings: []report.Finding{{
+			Socket:      socket.Socket{Port: 8080, Protocol: socket.TCP, Addr: netip.MustParseAddr("::"), State: socket.Listen},
+			Explanation: detect.Explanation{Source: detect.SourceProcess, Title: "owner not visible"},
+		}},
+	}
+	out := string(renderText(t, Colors{}, r))
+	if n := strings.Count(out, "owner not visible"); n != 1 {
+		t.Errorf("want the notice exactly once, got %d:\n%s", n, out)
+	}
+	golden(t, "text_owner_not_visible.golden", []byte(out))
+}
