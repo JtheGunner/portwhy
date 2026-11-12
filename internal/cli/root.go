@@ -40,6 +40,7 @@ func newRootCmd(d Deps) (*cobra.Command, *int) {
 	cmd.SetVersionTemplate("portwhy {{.Version}}\n")
 	f := cmd.Flags()
 	f.BoolVar(&flags.JSON, "json", false, "print machine-readable JSON")
+	f.BoolVar(&flags.Plain, "plain", false, "print one tab-separated line per socket: port, protocol, address, PID, source, name")
 	f.BoolVar(&flags.NoColor, "no-color", false, "disable coloured output")
 	f.BoolVarP(&flags.Kill, "kill", "k", false, "stop the cause of a busy port after confirmation")
 	f.BoolVarP(&flags.Yes, "yes", "y", false, "skip the confirmation prompt (requires --kill)")

@@ -95,8 +95,7 @@ func Run(ctx context.Context, t Terminator, port uint16, o Options, check PortCh
 	t = configure(t, o)
 
 	if o.DryRun {
-		_, err := fmt.Fprintf(o.Out, "Dry run, would execute: %s\n", t.Describe())
-		return err
+		return dryRun(ctx, t, o)
 	}
 	if p, ok := t.(preflighter); ok {
 		if err := p.preflight(ctx); err != nil {
@@ -120,6 +119,20 @@ func Run(ctx context.Context, t Terminator, port uint16, o Options, check PortCh
 		return err
 	}
 	return verifyFree(ctx, port, o, check)
+}
+
+// dryRun reports what a real run would do without signalling. A protected
+// target is named as such instead of "would execute", and is not an error:
+// nothing is executed either way.
+func dryRun(ctx context.Context, t Terminator, o Options) error {
+	if p, ok := t.(preflighter); ok {
+		if err := p.preflight(ctx); errors.Is(err, ErrProtected) {
+			_, werr := fmt.Fprintf(o.Out, "Dry run, would not execute: %v\n", err)
+			return werr
+		}
+	}
+	_, err := fmt.Fprintf(o.Out, "Dry run, would execute: %s\n", t.Describe())
+	return err
 }
 
 // verifyFree polls check until the port is free or the verify timeout passes.

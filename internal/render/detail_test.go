@@ -1,6 +1,7 @@
 package render
 
 import (
+	"context"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -229,4 +230,68 @@ func TestText_DetailLongHeadlineAndProcessNameFitTheWidth(t *testing.T) {
 			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
 		}
 	}
+}
+
+// hiddenOwnerReport builds a PID 0 report the way the real pipeline does: the
+// title comes from the generic detector and the advice from the advise package.
+func hiddenOwnerReport(t *testing.T) report.PortReport {
+	t.Helper()
+	sk := socket.Socket{Port: 8080, Protocol: socket.TCP, Addr: netip.MustParseAddr("::"), State: socket.Listen}
+	e, ok := detect.Generic().Detect(context.Background(), sk, nil)
+	if !ok || e == nil {
+		t.Fatal("generic detector must explain a socket without a visible owner")
+	}
+	return report.PortReport{
+		Port: 8080,
+		Findings: []report.Finding{{
+			Socket:      sk,
+			Explanation: *e,
+			Advice:      advise.Advise(advise.Input{GOOS: "linux", Socket: sk, Source: e.Source}),
+		}},
+	}
+}
+
+// The hint must appear once in the headline or rule line of every text mode.
+// The advice note under it carries the different sudo hint and stays.
+func TestText_HiddenOwnerHintOnceInHeadlineAdviceNoteRemains(t *testing.T) {
+	r := hiddenOwnerReport(t)
+	modes := []struct {
+		name     string
+		opts     Options
+		ruleWant string
+	}{
+		{"detail", Options{}, ":8080 · owner not visible"},
+		{"overview", Options{Overview: true}, "Owner not visible"},
+		{"expanded", Options{Overview: true, Expanded: true}, "Owner not visible · 1 port"},
+	}
+	for _, m := range modes {
+		t.Run(m.name, func(t *testing.T) {
+			var buf strings.Builder
+			if err := Text(&buf, []report.PortReport{r}, m.opts); err != nil {
+				t.Fatal(err)
+			}
+			out := buf.String()
+			var heads []string
+			for _, line := range strings.Split(out, "\n") {
+				lower := strings.ToLower(line)
+				if strings.Contains(lower, "owner not visible") && !strings.Contains(lower, "for details") {
+					heads = append(heads, line)
+				}
+			}
+			if len(heads) != 1 || strings.Count(strings.ToLower(heads[0]), "owner not visible") != 1 {
+				t.Fatalf("want exactly one headline with exactly one hint, got %q in:\n%s", heads, out)
+			}
+			if !strings.Contains(heads[0], m.ruleWant) {
+				t.Errorf("headline %q lacks %q", heads[0], m.ruleWant)
+			}
+			if !strings.Contains(out, "sudo") {
+				t.Errorf("advice note about sudo is missing:\n%s", out)
+			}
+		})
+	}
+	var buf strings.Builder
+	if err := Text(&buf, []report.PortReport{r}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "text_owner_not_visible.golden", []byte(buf.String()))
 }
