@@ -17,15 +17,42 @@ type Options struct {
 	Wide bool
 	// Overview selects the grouped list layout instead of detail blocks.
 	Overview bool
+	// Expanded selects the airy overview, with a titled rule per service and
+	// one row per port, instead of the compact table. It only applies together
+	// with Overview.
+	Expanded bool
+	// ASCII replaces the Unicode symbols and line characters by plain ASCII.
+	ASCII bool
+	// Sources are the sources found before any --source filter; the overview
+	// names them in its filter hint. Empty means the hint omits the filter.
+	Sources []report.SourceCount
+}
+
+// glyphs returns the symbol set the options ask for.
+func (o Options) glyphs() Glyphs {
+	if o.ASCII {
+		return asciiGlyphs
+	}
+	return unicodeGlyphs
+}
+
+// UseASCII reports whether the environment calls for plain ASCII output: a
+// dumb terminal or a locale that is not UTF-8. getenv is os.Getenv in
+// production.
+func UseASCII(getenv func(string) string) bool {
+	return glyphsFromEnv(getenv) == asciiGlyphs
 }
 
 // Text writes the reports as an overview (Options.Overview) or as detail
 // blocks, one per service or process holding a port.
 func Text(w io.Writer, reports []report.PortReport, opts Options) error {
 	var b strings.Builder
-	if opts.Overview {
+	switch {
+	case opts.Overview && opts.Expanded:
+		writeExpanded(&b, reports, opts)
+	case opts.Overview:
 		writeOverview(&b, reports, opts)
-	} else {
+	default:
 		for _, r := range reports {
 			writeDetail(&b, r, opts)
 		}

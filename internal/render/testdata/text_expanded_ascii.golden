@@ -1,0 +1,35 @@
+----------------------------- Spotify * 2 ports ------------------------------
+
+  !  1900  udp  0.0.0.0    PID 13250
+  !  5353  udp  0.0.0.0    PID 13250
+
+--------------------------- Antigravity * 4 ports ----------------------------
+
+     3000  tcp  127.0.0.1  PID 3983
+     3100  tcp  127.0.0.1  PID 3983
+     3306  tcp  127.0.0.1  PID 3983
+     3890  tcp  127.0.0.1  PID 3983
+
+---------------- Docker container "db" (postgres:16) * 1 port ----------------
+
+  !  5432  tcp  0.0.0.0    postgres (PID 812)
+
+-------------------- Homebrew service "php@8.4" * 1 port ---------------------
+
+     9000  tcp  127.0.0.1  php-fpm (PID 3884) +2 more
+
+------------------------ Owner not visible * 5 ports -------------------------
+
+  !    22  tcp  0.0.0.0    run with sudo
+  !    88  tcp  0.0.0.0    run with sudo
+  !   137  tcp  0.0.0.0    run with sudo
+  !   138  tcp  0.0.0.0    run with sudo
+  !   445  tcp  0.0.0.0    run with sudo
+
++--------------------------------- Summary ----------------------------------+
+| Busy ports    13                                                           |
+| Services      4     docker 1 * launchd 1 * process 2                       |
+| Reachable     8     ! bound to all interfaces                              |
+| Hidden owner  5     run with sudo                                          |
++----------------------------------------------------------------------------+
+  i  Details: portwhy 1900

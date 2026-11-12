@@ -77,21 +77,43 @@ func TestText_DetailProcessLayout(t *testing.T) {
 	golden(t, "text_detail_process.golden", renderText(t, Colors{}, processReport()))
 }
 
-func TestText_DetailCommandTruncatedAtWidth(t *testing.T) {
+func TestText_DetailCommandWrapsAtWidth(t *testing.T) {
 	var buf strings.Builder
 	if err := Text(&buf, []report.PortReport{processReport()}, Options{Width: 80}); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, line := range strings.Split(buf.String(), "\n") {
-		if n := utf8.RuneCountInString(line); n > 80 && !strings.Contains(line, "Facts") {
+		if n := utf8.RuneCountInString(line); n > 80 {
 			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
 		}
 	}
-	if !strings.Contains(buf.String(), "…") {
-		t.Errorf("the long command should end in an ellipsis:\n%s", buf.String())
+	if flat := strings.Join(strings.Fields(buf.String()), " "); !strings.Contains(flat, longCommand) {
+		t.Errorf("a command that fits in three lines must be shown whole:\n%s", buf.String())
 	}
-	golden(t, "text_detail_truncated.golden", []byte(buf.String()))
+	golden(t, "text_detail_wrapped_command.golden", []byte(buf.String()))
+}
+
+func TestText_DetailVeryLongCommandEndsInAnEllipsisAfterThreeLines(t *testing.T) {
+	r := processReport()
+	r.Findings[0].Explanation.Details[0].Value = strings.Repeat("--flag=value ", 30)
+	var buf strings.Builder
+	if err := Text(&buf, []report.PortReport{r}, Options{Width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "…") {
+		t.Errorf("an over-long command should end in an ellipsis:\n%s", out)
+	}
+	if n := strings.Count(out, "--flag=value"); n > 3*4 {
+		t.Errorf("command takes more than %d lines:\n%s", maxCommandLines, out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if n := utf8.RuneCountInString(line); n > 80 {
+			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
+		}
+	}
 }
 
 func TestText_DetailWideKeepsFullCommand(t *testing.T) {
@@ -181,7 +203,7 @@ func TestText_DetailWrappingKeepsTheWholeHint(t *testing.T) {
 	}
 
 	flat := strings.Join(strings.Fields(buf.String()), " ")
-	if !strings.Contains(flat, "KeepAlive is set; unloading the job keeps it down until the next login)") {
+	if !strings.Contains(flat, "KeepAlive is set; unloading the job keeps it down until the next login") {
 		t.Errorf("hint lost in wrapping:\n%s", buf.String())
 	}
 	if !strings.Contains(buf.String(), "launchctl bootout gui/501/ai.openclaw.gateway\n") {

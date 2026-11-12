@@ -68,3 +68,58 @@ func TestWrapWords(t *testing.T) {
 		})
 	}
 }
+
+func TestLayoutWidth(t *testing.T) {
+	tests := []struct {
+		name  string
+		width int
+		wide  bool
+		want  int
+	}{
+		{"piped output uses the default", 0, false, 78},
+		{"wide terminal is capped", 120, false, 100},
+		{"wide flag keeps the full width", 120, true, 120},
+		{"wide flag without a terminal", 0, true, 78},
+		{"tiny terminal is raised", 30, false, 40},
+		{"normal terminal", 80, false, 80},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := layoutWidth(tt.width, tt.wide); got != tt.want {
+				t.Errorf("layoutWidth(%d, %v) = %d, want %d", tt.width, tt.wide, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVisibleWidth(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"plain", "abc", 3},
+		{"empty", "", 0},
+		{"coloured", "\x1b[1m\x1b[32mabc\x1b[0m", 3},
+		{"multi-byte", "Überprüfung", 11},
+		{"colour inside text", "a\x1b[2mb\x1b[0mc", 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := visibleWidth(tt.in); got != tt.want {
+				t.Errorf("visibleWidth(%q) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPadVisible_IgnoresColourCodes(t *testing.T) {
+	got := padVisible("\x1b[1mab\x1b[0m", 5)
+
+	if want := "\x1b[1mab\x1b[0m   "; got != want {
+		t.Errorf("padVisible = %q, want %q", got, want)
+	}
+	if got := padVisible("abcd", 2); got != "abcd" {
+		t.Errorf("padVisible must not shorten, got %q", got)
+	}
+}

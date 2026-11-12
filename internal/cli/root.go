@@ -45,6 +45,7 @@ func newRootCmd(d Deps) (*cobra.Command, *int) {
 	f.BoolVarP(&flags.Yes, "yes", "y", false, "skip the confirmation prompt (requires --kill)")
 	f.BoolVar(&flags.Force, "force", false, "send SIGKILL immediately (requires --kill)")
 	f.BoolVar(&flags.Wide, "wide", false, "do not shorten long lines to the terminal width")
+	f.BoolVar(&flags.Expanded, "expanded", false, "show the overview of all ports in the airy layout, one row per port")
 	f.StringSliceVar(&flags.Source, "source", nil, "only show ports held by this source: docker, systemd, launchd or process (repeatable, comma-separated)")
 	f.BoolVar(&flags.DryRun, "dry-run", false, "show what --kill would do without doing it")
 	// The flag is registered above, so this can only fail on a programming error.

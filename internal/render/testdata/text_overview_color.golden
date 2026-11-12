@@ -1,11 +1,10 @@
-[1mSpotify[0m
-  [1m1900, 5353            [0m  udp  0.0.0.0    [33m![0m  PID 13250
-[1mAntigravity[0m
-  [1m3000, 3100, 3306, 3890[0m  tcp  127.0.0.1     PID 3983
-[1mDocker container "db" (postgres:16)[0m
-  [1m5432                  [0m  tcp  0.0.0.0    [33m![0m  postgres (PID 812)
-[1mHomebrew service "php@8.4"[0m
-  [1m9000                  [0m  tcp  127.0.0.1     php-fpm (PID 3884) +2 more
-[2m+ 5 sockets with hidden owner (22, 88, 137, 138, 445). Run with sudo.[0m
-[2m! reachable from the network (bound to all interfaces)[0m
-[2mDetails: portwhy 1900[0m
+     [2mService / process                  [0m  [2mPorts                 [0m  [2mProto[0m  [2mBind     [0m  [2mOwner[0m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+  [33m⚠[0m  [1mSpotify                            [0m  [1m[32m1900, 5353            [0m  [2mudp  [0m  0.0.0.0    PID 13250
+     [1mAntigravity                        [0m  [1m[32m3000, 3100, 3306, 3890[0m  [2mtcp  [0m  127.0.0.1  PID 3983
+  [33m⚠[0m  [1mDocker container "db" (postgres:16)[0m  [1m[32m5432                  [0m  [2mtcp  [0m  0.0.0.0    postgres (PID 812)
+     [1mHomebrew service "php@8.4"         [0m  [1m[32m9000                  [0m  [2mtcp  [0m  127.0.0.1  php-fpm (PID 3884) +2 more
+  [33m⚠[0m  [1mOwner not visible                  [0m  [1m[32m22, 88, 137, 138, 445 [0m  [2mtcp  [0m  0.0.0.0    run with sudo
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+  [1m[36m13[0m busy ports · [1m[36m4[0m services · [33m⚠[0m [1m[36m8[0m reachable from the network · [1m[36m5[0m ports with hidden owner
+  [36mℹ[0m  [2mDetails: portwhy 1900    Airy view: --expanded    Filter: --source docker|launchd|process[0m

@@ -32,6 +32,8 @@ type Flags struct {
 	Force   bool
 	DryRun  bool
 	Wide    bool
+	// Expanded switches the overview of all ports to the airy layout.
+	Expanded bool
 	// Source limits the listing, and with Kill the stop, to ports whose owner
 	// is one of these sources (docker, systemd, launchd, process).
 	Source []string
@@ -60,13 +62,8 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	reports = report.FilterBySource(reports, sources)
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, args, flags, sources); err != nil {
+	if err := write(d, reports, args, flags, sources, available); err != nil {
 		return fail(d, err)
-	}
-	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
-		if err := render.Sources(d.Stdout, available, textOptions(d, args, flags)); err != nil {
-			return fail(d, err)
-		}
 	}
 	if flags.Kill && stopAll(ctx, d, reports, flags) {
 		return exitKillFailure
@@ -91,11 +88,23 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 	}
 	check := portFree(d.Sockets)
 	done := make(map[string]bool)
+	ropts := textOptions(d, nil, flags, nil)
+	ropts.Colors = render.NewColors(d.StderrIsTTY, flags.NoColor)
+	counts := map[render.KillOutcome]int{}
+	line := func(o render.KillOutcome, port uint16, detail string) {
+		counts[o]++
+		_, _ = fmt.Fprintln(d.Stderr, render.KillLine(o, port, detail, ropts))
+	}
+	defer func() {
+		if !flags.DryRun && len(counts) > 0 {
+			_, _ = fmt.Fprintln(d.Stderr, render.KillSummary(counts, ropts))
+		}
+	}()
 
 	for _, r := range reports {
 		for _, f := range r.Findings {
 			if f.Explanation.Terminator == nil {
-				_, _ = fmt.Fprintf(d.Stderr, "portwhy: cannot stop port %d: the owning process is not visible; try again with sudo\n", r.Port)
+				line(render.KillFailed, r.Port, "cannot stop it: the owning process is not visible; try again with sudo")
 				failed = true
 				continue
 			}
@@ -110,12 +119,12 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 			switch {
 			case err == nil:
 				if !flags.DryRun {
-					_, _ = fmt.Fprintf(d.Stderr, "Port %d is free.\n", r.Port)
+					line(render.KillStopped, r.Port, "")
 				}
 			case errors.Is(err, kill.ErrDeclined):
-				_, _ = fmt.Fprintf(d.Stderr, "Port %d left untouched.\n", r.Port)
+				line(render.KillDeclined, r.Port, "")
 			default:
-				_, _ = fmt.Fprintf(d.Stderr, "portwhy: port %d: %v\n", r.Port, err)
+				line(render.KillFailed, r.Port, err.Error())
 				failed = true
 			}
 		}
@@ -140,7 +149,7 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source) error {
+func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source, available []report.SourceCount) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
@@ -148,17 +157,25 @@ func write(d Deps, reports []report.PortReport, args []string, flags Flags, sour
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
 		return err
 	}
-	return render.Text(d.Stdout, reports, textOptions(d, args, flags))
+	return render.Text(d.Stdout, reports, textOptions(d, args, flags, available))
 }
 
-// textOptions are the text layout settings for this run.
-func textOptions(d Deps, args []string, flags Flags) render.Options {
-	return render.Options{
+// textOptions are the text layout settings for this run. available are the
+// sources found before the --source filter; only the overview of all ports
+// names them, as the hint how to filter.
+func textOptions(d Deps, args []string, flags Flags, available []report.SourceCount) render.Options {
+	opts := render.Options{
 		Colors:   render.NewColors(d.IsTTY, flags.NoColor),
 		Width:    d.Width,
 		Wide:     flags.Wide,
 		Overview: overviewMode(args, flags.Kill),
+		ASCII:    d.ASCII,
+		Expanded: flags.Expanded,
 	}
+	if len(args) == 0 {
+		opts.Sources = available
+	}
+	return opts
 }
 
 // overviewMode reports whether the text output is the grouped overview: for

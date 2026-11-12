@@ -1,1 +1,4 @@
-:3000  free (only lingering time_wait connections)
+─────────────────────────────────── :3000 ────────────────────────────────────
+
+  ✓  free (only lingering time_wait connections)
+

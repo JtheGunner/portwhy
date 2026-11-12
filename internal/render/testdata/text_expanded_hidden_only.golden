@@ -1,0 +1,10 @@
+───────────────────────── Owner not visible · 1 port ─────────────────────────
+
+  ⚠  88  tcp  0.0.0.0  run with sudo
+
+╭───────────────────────────────── Summary ──────────────────────────────────╮
+│ Busy ports    1                                                            │
+│ Reachable     1     ⚠ bound to all interfaces                              │
+│ Hidden owner  1     run with sudo                                          │
+╰────────────────────────────────────────────────────────────────────────────╯
+  ℹ  Details: portwhy 88

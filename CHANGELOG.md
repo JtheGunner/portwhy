@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `--expanded` shows the overview of all ports in an airy layout: a titled rule per service, one row per port and a summary box.
+- The `--kill` run prints a status line per port (`✓` stopped, `ℹ` left untouched, `⚠` failed) and closes with a `Result` box.
+- Plain ASCII symbols and lines for `TERM=dumb` and non-UTF-8 locales.
+
+### Changed
+- The overview is a compact table with one row per service, a summary line and a hint line. Hidden owners appear as rows. The `Sources:` line is now part of the hint.
+- The detail view uses a titled rule, one fact per row and status symbols for scope, stop command and advice. Long commands wrap over up to three lines instead of being cut off.
+- Rules and boxes follow the terminal width, capped at 100 columns; piped output uses 78. `--wide` uses the full width.
+- JSON output, exit codes, the confirmation prompt and the stop behaviour are unchanged.
+
 ## [0.2.0] - 2026-11-12
 
 ### Added

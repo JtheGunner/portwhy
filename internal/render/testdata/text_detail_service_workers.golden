@@ -1,5 +1,12 @@
-:9000  TCP 0.0.0.0  Homebrew service "php@8.4"
-       Process  php-fpm (PID 3884) +2 more
-       Facts    Label homebrew.mxcl.php@8.4 · Uptime 3d 0h
-       Stop     brew services stop php@8.4
-       !        Reachable from the network (bound to all interfaces).
+───────────────────── :9000 · Homebrew service "php@8.4" ─────────────────────
+
+  ℹ  tcp 0.0.0.0
+
+     Process  php-fpm (PID 3884) +2 more
+     Uptime   3d 0h
+     Label    homebrew.mxcl.php@8.4
+
+  →  Stop     brew services stop php@8.4
+
+  ⚠  Reachable from the network (bound to all interfaces).
+

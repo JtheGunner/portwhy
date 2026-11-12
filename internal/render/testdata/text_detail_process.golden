@@ -1,6 +1,12 @@
-:3000  TCP 127.0.0.1  Antigravity (PID 3983)
-       Command     php-fpm: master process (/opt/homebrew/etc/php/8.4/php-fpm.conf) --nodaemonize --fpm-config /opt/homebrew/etc/php/8.4/php-fpm.conf
-       Facts       User jeffry · Uptime 6d 1h
-       Cwd         /Users/jeffry/Projects/some/deeply/nested/project/directory
-       Started by  Antigravity ← launchd
-       Stop        kill 3983
+─────────────────────── :3000 · Antigravity (PID 3983) ───────────────────────
+
+  ℹ  tcp 127.0.0.1
+
+     User        jeffry
+     Uptime      6d 1h
+     Started by  Antigravity ← launchd
+     Command     php-fpm: master process (/opt/homebrew/etc/php/8.4/php-fpm.conf) --nodaemonize --fpm-config /opt/homebrew/etc/php/8.4/php-fpm.conf
+     Directory   /Users/jeffry/Projects/some/deeply/nested/project/directory
+
+  →  Stop        kill 3983
+

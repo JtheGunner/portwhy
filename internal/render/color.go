@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	ansiReset  = "\x1b[0m"
-	ansiGreen  = "\x1b[32m"
-	ansiYellow = "\x1b[33m"
-	ansiCyan   = "\x1b[36m"
-	ansiBold   = "\x1b[1m"
-	ansiDim    = "\x1b[2m"
+	ansiReset   = "\x1b[0m"
+	ansiGreen   = "\x1b[32m"
+	ansiYellow  = "\x1b[33m"
+	ansiCyan    = "\x1b[36m"
+	ansiMagenta = "\x1b[35m"
+	ansiBold    = "\x1b[1m"
+	ansiDim     = "\x1b[2m"
 )
 
 // Colors decides whether ANSI colour sequences are written.
@@ -59,3 +60,21 @@ func (c Colors) paint(code, s string) string {
 func (c Colors) bold(s string) string { return c.paint(ansiBold, s) }
 
 func (c Colors) dim(s string) string { return c.paint(ansiDim, s) }
+
+// accent colours rule lines, numbers and informational symbols.
+func (c Colors) accent(s string) string { return c.paint(ansiCyan, s) }
+
+// port colours a port number.
+func (c Colors) port(s string) string { return c.paint(ansiBold+ansiGreen, s) }
+
+// ok colours a success symbol.
+func (c Colors) ok(s string) string { return c.paint(ansiGreen, s) }
+
+// warn colours a warning symbol.
+func (c Colors) warn(s string) string { return c.paint(ansiYellow, s) }
+
+// boxBorder colours the frame of a summary box.
+func (c Colors) boxBorder(s string) string { return c.paint(ansiMagenta, s) }
+
+// number colours a count in a summary line.
+func (c Colors) number(s string) string { return c.paint(ansiBold+ansiCyan, s) }

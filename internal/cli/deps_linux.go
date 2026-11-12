@@ -11,6 +11,7 @@ import (
 	"github.com/JtheGunner/portwhy/internal/detect/systemd"
 	"github.com/JtheGunner/portwhy/internal/execx"
 	"github.com/JtheGunner/portwhy/internal/proc"
+	"github.com/JtheGunner/portwhy/internal/render"
 	"github.com/JtheGunner/portwhy/internal/socket"
 )
 
@@ -26,16 +27,18 @@ const (
 func DefaultDeps() Deps {
 	procs := proc.NewReader("")
 	return Deps{
-		Sockets:    socket.NewCollector(""),
-		Procs:      procs,
-		Detector:   newDetector(detect.NewGeneric(procs, os.Getpid()), systemdDetectors(procs)...),
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
-		IsTTY:      isTerminal(os.Stdout),
-		Width:      terminalWidth(os.Stdout),
-		Stdin:      os.Stdin,
-		StdinIsTTY: isTerminal(os.Stdin),
-		Pid:        os.Getpid(),
+		Sockets:     socket.NewCollector(""),
+		Procs:       procs,
+		Detector:    newDetector(detect.NewGeneric(procs, os.Getpid()), systemdDetectors(procs)...),
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+		IsTTY:       isTerminal(os.Stdout),
+		Width:       terminalWidth(os.Stdout),
+		ASCII:       render.UseASCII(os.Getenv),
+		Stdin:       os.Stdin,
+		StdinIsTTY:  isTerminal(os.Stdin),
+		StderrIsTTY: isTerminal(os.Stderr),
+		Pid:         os.Getpid(),
 	}
 }
 

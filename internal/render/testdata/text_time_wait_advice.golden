@@ -1,2 +1,5 @@
-:3000  free (only lingering time_wait connections)
-       i Nobody is listening; the port is in TIME_WAIT. Wait for it to clear or bind with SO_REUSEADDR.
+─────────────────────────────────── :3000 ────────────────────────────────────
+
+  ✓  free (only lingering time_wait connections)
+  ℹ  Nobody is listening; the port is in TIME_WAIT. Wait for it to clear or bind with SO_REUSEADDR.
+
