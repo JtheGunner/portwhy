@@ -25,7 +25,7 @@ func Parse(args []string) ([]uint16, error) {
 	for _, arg := range args {
 		first, last, err := parseArg(arg)
 		if err != nil {
-			return nil, fmt.Errorf("%w %q: %s", ErrInvalid, arg, err)
+			return nil, fmt.Errorf("%w %q: %w", ErrInvalid, arg, err)
 		}
 		for port := first; port <= last; port++ {
 			seen[port] = true
