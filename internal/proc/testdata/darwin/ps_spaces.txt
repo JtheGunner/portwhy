@@ -1,0 +1,1 @@
+41 1 devuser Sat Nov  7 09:05:01 2026 /Applications/My App.app/Contents/MacOS/My App --flag
