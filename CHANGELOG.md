@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-12
+
 ### Added
 - `--expanded` shows the overview of all ports in an airy layout: a titled rule per service, one row per port and a summary box.
 - The `--kill` run prints a status line per port (`✓` stopped, `ℹ` left untouched, `⚠` failed) and closes with a `Result` box.
@@ -51,6 +53,7 @@ First release.
 - Shell completion for bash, zsh and fish via `portwhy completion <shell>`.
 - Pre-built binaries for macOS and Linux on amd64 and arm64, and a Homebrew tap (`JtheGunner/tap`).
 
-[Unreleased]: https://github.com/JtheGunner/portwhy/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/JtheGunner/portwhy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/JtheGunner/portwhy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JtheGunner/portwhy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/JtheGunner/portwhy/releases/tag/v0.1.0
