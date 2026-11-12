@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -61,7 +60,7 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	reports = report.FilterBySource(reports, sources)
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, flags, sources); err != nil {
+	if err := write(d, reports, args, flags, sources); err != nil {
 		return fail(d, err)
 	}
 	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
@@ -141,7 +140,7 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, flags Flags, sources []detect.Source) error {
+func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
