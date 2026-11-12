@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -32,6 +31,7 @@ type Flags struct {
 	Yes     bool
 	Force   bool
 	DryRun  bool
+	Wide    bool
 	// Source limits the listing, and with Kill the stop, to ports whose owner
 	// is one of these sources (docker, systemd, launchd, process).
 	Source []string
@@ -60,11 +60,11 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	reports = report.FilterBySource(reports, sources)
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, flags, sources); err != nil {
+	if err := write(d, reports, args, flags, sources); err != nil {
 		return fail(d, err)
 	}
 	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
-		if err := render.Sources(d.Stdout, available); err != nil {
+		if err := render.Sources(d.Stdout, available, textOptions(d, args, flags)); err != nil {
 			return fail(d, err)
 		}
 	}
@@ -140,7 +140,7 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, flags Flags, sources []detect.Source) error {
+func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
@@ -148,8 +148,32 @@ func write(d Deps, reports []report.PortReport, flags Flags, sources []detect.So
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
 		return err
 	}
-	colors := render.Colors{Enabled: d.IsTTY && !flags.NoColor && os.Getenv("NO_COLOR") == ""}
-	return render.Text(d.Stdout, reports, colors)
+	return render.Text(d.Stdout, reports, textOptions(d, args, flags))
+}
+
+// textOptions are the text layout settings for this run.
+func textOptions(d Deps, args []string, flags Flags) render.Options {
+	return render.Options{
+		Colors:   render.NewColors(d.IsTTY, flags.NoColor),
+		Width:    d.Width,
+		Wide:     flags.Wide,
+		Overview: overviewMode(args, flags.Kill),
+	}
+}
+
+// overviewMode reports whether the text output is the grouped overview: for
+// no arguments or only ranges. A named port, and every --kill run, gets the
+// detailed blocks so the user sees exactly what would be stopped.
+func overviewMode(args []string, kill bool) bool {
+	if kill {
+		return false
+	}
+	for _, arg := range args {
+		if !strings.Contains(arg, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 func noBusyPortsMessage(sources []detect.Source) string {

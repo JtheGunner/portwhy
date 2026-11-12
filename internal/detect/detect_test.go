@@ -166,3 +166,31 @@ func TestGeneric_NoTerminatorWithoutProcess(t *testing.T) {
 		t.Errorf("Terminator = %v, want nil for an invisible owner", got.Terminator)
 	}
 }
+
+func TestAncestorChain_DropsAdjacentDuplicates(t *testing.T) {
+	tests := []struct {
+		name      string
+		ancestors []string
+		want      string
+	}{
+		{"adjacent repeat", []string{"Antigravity", "launchd"}, "Antigravity ← launchd"},
+		{"non-adjacent repeat stays", []string{"sh", "node", "sh"}, "node ← sh ← node ← sh"},
+		{"none", nil, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name := "node"
+			if tt.name == "adjacent repeat" {
+				name = "Antigravity"
+			}
+			p := proc.Process{Name: name}
+			for _, a := range tt.ancestors {
+				p.Ancestors = append(p.Ancestors, proc.Ancestor{Name: a})
+			}
+
+			if got := ancestorChain(p); got != tt.want {
+				t.Errorf("ancestorChain = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

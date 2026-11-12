@@ -59,10 +59,10 @@ func NewDetector(query, stop execx.Runner, uid int) *Detector {
 // Detect implements detect.Detector.
 func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process) (*detect.Explanation, bool) {
 	// The system domain (root) is out of scope, and "gui/0" does not exist.
-	if d.uid == 0 || p == nil || p.PPID != launchdPID {
+	if d.uid == 0 || p == nil {
 		return nil, false
 	}
-	label := d.labelOf(ctx, p.PID)
+	label := d.jobLabel(ctx, p)
 	if label == "" || strings.HasPrefix(label, applePrefix) || strings.HasPrefix(label, applicationPrefix) {
 		return nil, false
 	}
@@ -84,6 +84,22 @@ func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process)
 		e.Details = append(e.Details, detect.Detail{Key: "Uptime", Value: detect.FormatUptime(d.now().Sub(p.Started))})
 	}
 	return e, true
+}
+
+// jobLabel returns the label of the launchd job the process belongs to: the
+// process itself when launchd started it, or its direct parent when that is a
+// job (a master and its workers). Only the direct parent counts: stopping a
+// job ends everything below it, so a process that merely has a job somewhere
+// up its ancestor chain, such as a command run from a CI runner service, must
+// never be stopped through that job.
+func (d *Detector) jobLabel(ctx context.Context, p *proc.Process) string {
+	if p.PPID == launchdPID {
+		return d.labelOf(ctx, p.PID)
+	}
+	if len(p.Ancestors) > 0 && p.Ancestors[0].PID == p.PPID && p.PPID != launchdPID {
+		return d.labelOf(ctx, p.PPID)
+	}
+	return ""
 }
 
 // labelOf returns the launchd label of pid, or "" when pid is not a job.

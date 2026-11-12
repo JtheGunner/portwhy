@@ -49,10 +49,10 @@ func TestRun_SourceFilterKeepsOnlyMatchingPorts(t *testing.T) {
 		t.Errorf("exit = %d, want 0", got)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, ":5432") || !strings.Contains(out, ":8080") {
+	if !strings.Contains(out, "5432") || !strings.Contains(out, "8080") {
 		t.Errorf("stdout = %q, want both docker ports", out)
 	}
-	if strings.Contains(out, ":3000") {
+	if strings.Contains(out, "3000") {
 		t.Errorf("stdout = %q, want the process port filtered out", out)
 	}
 }
@@ -62,7 +62,7 @@ func TestRun_SourceFilterIsCaseInsensitive(t *testing.T) {
 
 	got := Run(context.Background(), d, nil, Flags{Source: []string{"Docker"}})
 
-	if got != 0 || !strings.Contains(stdout.String(), ":5432") {
+	if got != 0 || !strings.Contains(stdout.String(), "5432") {
 		t.Errorf("exit = %d, stdout = %q, want docker ports", got, stdout.String())
 	}
 }
@@ -242,7 +242,7 @@ func TestRootCmd_SourceFlagAcceptsCommaSeparatedAndRepeated(t *testing.T) {
 		}
 
 		out := stdout.String()
-		if *exit != 0 || !strings.Contains(out, ":3000") || !strings.Contains(out, ":5432") {
+		if *exit != 0 || !strings.Contains(out, "3000") || !strings.Contains(out, "5432") {
 			t.Errorf("args %v: exit = %d, stdout = %q, want docker and process ports", args, *exit, out)
 		}
 	}

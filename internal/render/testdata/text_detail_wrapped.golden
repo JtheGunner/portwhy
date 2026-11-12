@@ -1,0 +1,16 @@
+:18789  TCP 0.0.0.0  launchd job "ai.openclaw.gateway"
+       Process  node (PID 3863)
+       Facts    Domain gui/501 · Uptime 6d 2h
+       Stop     launchctl bootout gui/501/ai.openclaw.gateway
+                (launchd restarts it after a plain kill if KeepAlive is set;
+                unloading the job keeps it down until the next login)
+       !        Reachable from the network (bound to all interfaces).
+:3000  TCP 127.0.0.1  Antigravity (PID 3983)
+       Command     php-fpm: master process (/opt/homebrew/etc/php/8.4/php-fpm.c…
+       Facts       User jeffry · Uptime 6d 1h
+       Cwd         /Users/jeffry/Projects/some/deeply/nested/project/directory
+       Started by  Antigravity ← launchd
+       Stop        kill 3983
+:3000  free (only lingering time_wait connections)
+       i Nobody is listening; the port is in TIME_WAIT. Wait for it to clear or
+         bind with SO_REUSEADDR.

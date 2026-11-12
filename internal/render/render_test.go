@@ -90,7 +90,7 @@ func adviceReport() report.PortReport {
 func renderText(t *testing.T, c Colors, reports ...report.PortReport) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := Text(&buf, reports, c); err != nil {
+	if err := Text(&buf, reports, Options{Colors: c}); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -226,7 +226,7 @@ func TestText_ControlCharactersInExternalStringsAreNeutralised(t *testing.T) {
 		out := renderText(t, c, r)
 		stripped := out
 		if c.Enabled {
-			for _, code := range []string{ansiGreen, ansiYellow, ansiCyan, ansiReset} {
+			for _, code := range []string{ansiGreen, ansiYellow, ansiCyan, ansiBold, ansiDim, ansiReset} {
 				stripped = bytes.ReplaceAll(stripped, []byte(code), nil)
 			}
 		}
@@ -258,4 +258,49 @@ func TestJSON_TimeWaitOnlyWithAdvice(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden(t, "json_time_wait_advice.golden", b.Bytes())
+}
+
+func TestNewColors(t *testing.T) {
+	tests := []struct {
+		name        string
+		isTTY       bool
+		noColorFlag bool
+		env         map[string]string
+		want        bool
+	}{
+		{"terminal", true, false, nil, true},
+		{"not a terminal", false, false, nil, false},
+		{"flag", true, true, nil, false},
+		{"NO_COLOR", true, false, map[string]string{"NO_COLOR": "1"}, false},
+		{"empty NO_COLOR is ignored", true, false, map[string]string{"NO_COLOR": ""}, true},
+		{"dumb terminal", true, false, map[string]string{"TERM": "dumb"}, false},
+		{"xterm", true, false, map[string]string{"TERM": "xterm-256color"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", "")
+			t.Setenv("TERM", "xterm")
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			if got := NewColors(tt.isTTY, tt.noColorFlag).Enabled; got != tt.want {
+				t.Errorf("NewColors(%v, %v).Enabled = %v, want %v", tt.isTTY, tt.noColorFlag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestColors_BoldDimWrapOnlyWhenEnabled(t *testing.T) {
+	on, off := Colors{Enabled: true}, Colors{}
+
+	if got := on.bold("x"); got != "\x1b[1mx\x1b[0m" {
+		t.Errorf("bold = %q", got)
+	}
+	if got := on.dim("x"); got != "\x1b[2mx\x1b[0m" {
+		t.Errorf("dim = %q", got)
+	}
+	if off.bold("x") != "x" || off.dim("x") != "x" {
+		t.Error("disabled colours must return the plain string")
+	}
 }
