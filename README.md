@@ -168,7 +168,7 @@ When several apply, the precedence is `2` > `3` > `0` > `1`.
 - portwhy never stops PID 1 or itself, re-checks the process start time before signalling (PID reuse), and verifies afterwards that the port is free.
 - A process owned by another user is reported with a `sudo` hint. portwhy never escalates silently.
 - A port held by a process that portwhy cannot see is never reported as free.
-- Hints warn when the cause will come back, for example a Docker restart policy or a systemd `Restart=` setting.
+- Hints warn when the cause will come back, for example a Docker restart policy or a systemd `Restart=` setting. A systemd explanation says whether the port holder is the main process of the unit and warns that `systemctl stop` ends the whole unit.
 
 ---
 

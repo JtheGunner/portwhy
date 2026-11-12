@@ -36,8 +36,29 @@ func newTestDetector(query, stop execx.Runner, uid int) *Detector {
 	return d
 }
 
+// showRunner answers the show call with the given Restart value and no
+// MainPID line.
 func showRunner(key, restart string) *execx.Fake {
-	return &execx.Fake{Responses: map[string][]byte{key: []byte(restart + "\n")}}
+	return showOutput(key, "Restart="+restart+"\n")
+}
+
+func showOutput(key, output string) *execx.Fake {
+	return &execx.Fake{Responses: map[string][]byte{key: []byte(output)}}
+}
+
+const (
+	showSystem = "systemctl show -p Restart -p MainPID postgresql.service"
+	showUser   = "systemctl --user show -p Restart -p MainPID foo.service"
+	stopHint   = "systemctl stop ends the whole unit, including every process in it"
+)
+
+func hasHint(hints []string, want string) bool {
+	for _, h := range hints {
+		if h == want {
+			return true
+		}
+	}
+	return false
 }
 
 func detail(details []detect.Detail, key string) string {
@@ -50,7 +71,7 @@ func detail(details []detect.Detail, key string) string {
 }
 
 func TestDetector_ExplainsSystemService(t *testing.T) {
-	query := showRunner("systemctl show -p Restart --value postgresql.service", "always")
+	query := showRunner("systemctl show -p Restart -p MainPID postgresql.service", "always")
 
 	got, ok := newTestDetector(query, &execx.Fake{}, 1000).Detect(context.Background(), testSocket, process(systemCgroup))
 
@@ -81,7 +102,7 @@ func TestDetector_ExplainsSystemService(t *testing.T) {
 }
 
 func TestDetector_ExplainsUserService(t *testing.T) {
-	query := showRunner("systemctl --user show -p Restart --value foo.service", "no")
+	query := showRunner("systemctl --user show -p Restart -p MainPID foo.service", "no")
 
 	got, ok := newTestDetector(query, &execx.Fake{}, 1000).Detect(context.Background(), testSocket, process(userCgroup))
 
@@ -109,12 +130,12 @@ func TestDetector_RestartHint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("Restart="+tt.restart, func(t *testing.T) {
-			query := showRunner("systemctl show -p Restart --value postgresql.service", tt.restart)
+			query := showRunner("systemctl show -p Restart -p MainPID postgresql.service", tt.restart)
 
 			got, _ := newTestDetector(query, &execx.Fake{}, 0).Detect(context.Background(), testSocket, process(systemCgroup))
 
-			if hasHint := len(got.Hints) > 0; hasHint != tt.wantHint {
-				t.Errorf("hint present = %v, want %v (hints %v)", hasHint, tt.wantHint, got.Hints)
+			if gotHint := len(got.Hints) > 1; gotHint != tt.wantHint {
+				t.Errorf("hint present = %v, want %v (hints %v)", gotHint, tt.wantHint, got.Hints)
 			}
 			if tt.wantHint && !strings.Contains(got.Hints[0], "Restart="+tt.restart) {
 				t.Errorf("hint %q does not name Restart=%s", got.Hints[0], tt.restart)
@@ -133,8 +154,8 @@ func TestDetector_FallsBackSilently(t *testing.T) {
 		query execx.Runner
 		p     *proc.Process
 	}{
-		{"systemctl missing", &execx.Fake{Errors: map[string]error{"systemctl show -p Restart --value postgresql.service": missing}}, process(systemCgroup)},
-		{"systemd not running", &execx.Fake{Errors: map[string]error{"systemctl show -p Restart --value postgresql.service": errors.New("System has not been booted with systemd")}}, process(systemCgroup)},
+		{"systemctl missing", &execx.Fake{Errors: map[string]error{"systemctl show -p Restart -p MainPID postgresql.service": missing}}, process(systemCgroup)},
+		{"systemd not running", &execx.Fake{Errors: map[string]error{"systemctl show -p Restart -p MainPID postgresql.service": errors.New("System has not been booted with systemd")}}, process(systemCgroup)},
 		{"no process", &execx.Fake{}, nil},
 		{"no cgroup", &execx.Fake{}, process("")},
 		{"scope only", &execx.Fake{}, process("/user.slice/user-1000.slice/session-3.scope")},
@@ -163,7 +184,7 @@ func TestDetector_OtherUsersUserUnitIsNotMatched(t *testing.T) {
 }
 
 func TestDetector_CleansExternalStrings(t *testing.T) {
-	query := showRunner("systemctl show -p Restart --value postgresql.service", "always\x1b[2J")
+	query := showOutput(showSystem, "Restart=always\x1b[2J\nMainPID=7\x1b[2J\n")
 	p := process(systemCgroup)
 	p.Name = "evil\x1b[2Jname"
 
@@ -306,8 +327,8 @@ func TestDetector_OwnUnitIsNotMatched(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			query := &execx.Fake{Responses: map[string][]byte{
-				"systemctl show -p Restart --value postgresql.service": []byte("no\n"),
-				"systemctl --user show -p Restart --value foo.service": []byte("no\n"),
+				"systemctl show -p Restart -p MainPID postgresql.service": []byte("Restart=no\nMainPID=812\n"),
+				"systemctl --user show -p Restart -p MainPID foo.service": []byte("Restart=no\nMainPID=812\n"),
 			}}
 
 			_, ok := NewDetector(query, &execx.Fake{}, 1000, tt.ownCgroup).Detect(context.Background(), testSocket, process(tt.cgroup))
@@ -319,5 +340,81 @@ func TestDetector_OwnUnitIsNotMatched(t *testing.T) {
 				t.Errorf("ran %v, want no systemctl call for the own unit", query.Calls())
 			}
 		})
+	}
+}
+
+func TestDetector_RoleOfHolder(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		wantRole string
+		wantRow  bool
+	}{
+		{"master is the main process", "MainPID=812\nRestart=no\n", "main process of the unit", true},
+		{"worker is a child process", "MainPID=800\nRestart=no\n", "child process of the unit (main PID 800)", true},
+		{"property order does not matter", "Restart=no\nMainPID=800\n", "child process of the unit (main PID 800)", true},
+		{"MainPID missing", "Restart=no\n", "", false},
+		{"MainPID zero", "MainPID=0\nRestart=no\n", "", false},
+		{"MainPID empty", "MainPID=\nRestart=no\n", "", false},
+		{"MainPID garbage", "MainPID=abc\nRestart=no\n", "", false},
+		{"MainPID negative", "MainPID=-5\nRestart=no\n", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := showOutput(showSystem, tt.output)
+
+			got, ok := newTestDetector(query, &execx.Fake{}, 0).Detect(context.Background(), testSocket, process(systemCgroup))
+
+			if !ok {
+				t.Fatal("Detect() did not match")
+			}
+			if v := detail(got.Details, "Role"); v != tt.wantRole {
+				t.Errorf("Role = %q, want %q", v, tt.wantRole)
+			}
+			if !hasHint(got.Hints, stopHint) {
+				t.Errorf("hints %v lack %q", got.Hints, stopHint)
+			}
+		})
+	}
+}
+
+func TestDetector_RoleFollowsProcess(t *testing.T) {
+	query := showOutput(showSystem, "MainPID=812\nRestart=no\n")
+
+	got, _ := newTestDetector(query, &execx.Fake{}, 0).Detect(context.Background(), testSocket, process(systemCgroup))
+
+	var keys []string
+	for _, d := range got.Details {
+		keys = append(keys, d.Key)
+	}
+	want := []string{"Scope", "Process", "Role", "Uptime"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Errorf("detail keys = %v, want %v", keys, want)
+	}
+}
+
+func TestDetector_UserUnitQueriesUserManager(t *testing.T) {
+	query := showOutput(showUser, "MainPID=900\nRestart=on-failure\n")
+
+	got, ok := newTestDetector(query, &execx.Fake{}, 1000).Detect(context.Background(), testSocket, process(userCgroup))
+
+	if !ok {
+		t.Fatal("Detect() did not match")
+	}
+	if v := detail(got.Details, "Role"); v != "child process of the unit (main PID 900)" {
+		t.Errorf("Role = %q", v)
+	}
+	if !hasHint(got.Hints, stopHint) {
+		t.Errorf("hints %v lack %q", got.Hints, stopHint)
+	}
+}
+
+func TestDetector_ShowFailureFallsBack(t *testing.T) {
+	query := &execx.Fake{Errors: map[string]error{showSystem: errors.New("exit status 1")}}
+
+	got, ok := newTestDetector(query, &execx.Fake{}, 0).Detect(context.Background(), testSocket, process(systemCgroup))
+
+	if ok || got != nil {
+		t.Errorf("Detect() = %v, %v, want no match", got, ok)
 	}
 }
