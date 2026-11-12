@@ -143,7 +143,9 @@ func TestText_MultipleReports(t *testing.T) {
 func TestColorsFor(t *testing.T) {
 	var buf bytes.Buffer
 	t.Setenv("NO_COLOR", "")
-	os.Unsetenv("NO_COLOR")
+	if err := os.Unsetenv("NO_COLOR"); err != nil {
+		t.Fatal(err)
+	}
 	if ColorsFor(&buf, false).Enabled {
 		t.Error("non-file writer must not get colours")
 	}
@@ -151,7 +153,7 @@ func TestColorsFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if ColorsFor(f, false).Enabled {
 		t.Error("regular file is not a TTY")
 	}
