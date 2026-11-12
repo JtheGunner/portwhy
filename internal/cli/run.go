@@ -25,7 +25,9 @@ const (
 
 // Flags are the command line options.
 type Flags struct {
-	JSON    bool
+	JSON bool
+	// Plain prints one tab-separated line per socket for grep and awk.
+	Plain   bool
 	NoColor bool
 	Kill    bool
 	Yes     bool
@@ -44,6 +46,9 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	ports, err := portspec.Parse(args)
 	if err != nil {
 		return fail(d, err)
+	}
+	if flags.Plain && flags.JSON {
+		return fail(d, errors.New("--plain and --json cannot be combined"))
 	}
 	if flags.Yes && !flags.Kill {
 		return fail(d, errors.New("--yes requires --kill"))
@@ -172,6 +177,9 @@ func portFree(c socket.Collector) kill.PortChecker {
 func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source, available []report.SourceCount) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
+	}
+	if flags.Plain {
+		return render.Plain(d.Stdout, reports)
 	}
 	if len(reports) == 0 {
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
