@@ -28,6 +28,7 @@ func writeReport(b *strings.Builder, r report.PortReport, c Colors) {
 	if len(r.Findings) == 0 {
 		if r.TimeWaitOnly {
 			fmt.Fprintf(b, ":%d  free (only lingering time_wait connections)\n", r.Port)
+			writeAdvice(b, r.Advice, c)
 			return
 		}
 		fmt.Fprintf(b, ":%d  free\n", r.Port)
@@ -66,7 +67,11 @@ func writeFinding(b *strings.Builder, f report.Finding, c Colors) {
 		fmt.Fprintf(b, "%s%s\n", indent, hints)
 	}
 
-	for _, a := range f.Advice {
+	writeAdvice(b, f.Advice, c)
+}
+
+func writeAdvice(b *strings.Builder, advice []advise.Advice, c Colors) {
+	for _, a := range advice {
 		marker := c.paint(ansiCyan, "i")
 		if a.Level == advise.Warn {
 			marker = c.paint(ansiYellow, "!")
