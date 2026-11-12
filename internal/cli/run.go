@@ -102,7 +102,12 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 	}()
 
 	for _, r := range reports {
-		for _, f := range r.Findings {
+		for i, f := range r.Findings {
+			if i > 0 && !flags.DryRun && portIsFree(ctx, check, r.Port) {
+				// An earlier stop already freed the port; the remaining findings
+				// belong to processes that are gone. The stop line was printed.
+				break
+			}
 			if f.Explanation.Terminator == nil {
 				line(render.KillFailed, r.Port, "cannot stop it: the owning process is not visible; try again with sudo")
 				failed = true
@@ -130,6 +135,13 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 		}
 	}
 	return failed
+}
+
+// portIsFree reports whether the port is verifiably free. A failing check
+// counts as busy so a stop is never skipped on doubt.
+func portIsFree(ctx context.Context, check kill.PortChecker, port uint16) bool {
+	free, err := check(ctx, port)
+	return err == nil && free
 }
 
 // portFree returns a kill.PortChecker that treats any listening socket on the
