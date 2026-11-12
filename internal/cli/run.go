@@ -133,7 +133,7 @@ func write(d Deps, reports []report.PortReport, flags Flags) error {
 		return err
 	}
 	colors := render.Colors{Enabled: d.IsTTY && !flags.NoColor && os.Getenv("NO_COLOR") == ""}
-	return render.Text(d.Stdout, reports, colors)
+	return render.Text(d.Stdout, reports, render.Options{Colors: colors})
 }
 
 // visibleReports hides free ports unless they were requested as a single port.

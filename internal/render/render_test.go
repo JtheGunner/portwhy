@@ -90,7 +90,7 @@ func adviceReport() report.PortReport {
 func renderText(t *testing.T, c Colors, reports ...report.PortReport) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := Text(&buf, reports, c); err != nil {
+	if err := Text(&buf, reports, Options{Colors: c}); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()

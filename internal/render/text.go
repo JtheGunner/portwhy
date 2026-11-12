@@ -12,8 +12,20 @@ import (
 
 const indent = "       " // 7 spaces: aligns details under the text after ":<port>  ".
 
+// Options controls the text layout.
+type Options struct {
+	Colors Colors
+	// Width is the terminal width in columns; 0 means unlimited.
+	Width int
+	// Wide disables shortening of long values.
+	Wide bool
+	// Overview selects the grouped list layout instead of detail blocks.
+	Overview bool
+}
+
 // Text writes one block per busy socket and one line per free port.
-func Text(w io.Writer, reports []report.PortReport, c Colors) error {
+func Text(w io.Writer, reports []report.PortReport, opts Options) error {
+	c := opts.Colors
 	var b strings.Builder
 	for _, r := range reports {
 		writeReport(&b, r, c)
