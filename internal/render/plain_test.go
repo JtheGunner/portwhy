@@ -81,10 +81,10 @@ func TestPlain_KeepsLongNamesAndNeutralisesTabs(t *testing.T) {
 
 func TestPlain_ReplacesControlCharactersInNameAndSource(t *testing.T) {
 	out := renderPlain(t, reportOf(
-		finding(80, socket.TCP, "0.0.0.0", 1, "\x1b[31mred\x1b[0m", detect.Source("src\x07\x9b"), "t"),
+		finding(80, socket.TCP, "0.0.0.0", 1, "\x1b[31mred\x1b[0m", detect.Source("src\x07\u009b"), "t"),
 	))
 
-	if strings.Contains(out, "\x1b") || strings.ContainsAny(out, "\x07\x9b") {
+	if strings.Contains(out, "\x1b") || strings.ContainsAny(out, "\x07\u009b") {
 		t.Errorf("output contains control characters: %q", out)
 	}
 	want := "80\ttcp\t0.0.0.0\t1\tsrc??\t?[31mred?[0m\n"
