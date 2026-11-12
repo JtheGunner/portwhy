@@ -40,7 +40,7 @@ func runTests(m *testing.M) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	binary = filepath.Join(dir, "portwhy")
 	build := exec.Command("go", "build", "-o", binary, "../cmd/portwhy")
@@ -66,7 +66,7 @@ func runListener() {
 		if err != nil {
 			os.Exit(2)
 		}
-		c.Close()
+		_ = c.Close()
 	}
 }
 
@@ -112,7 +112,7 @@ func freePort(t *testing.T) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port
 }
 
@@ -163,7 +163,7 @@ func canListen(port int) bool {
 	if err != nil {
 		return false
 	}
-	l.Close()
+	_ = l.Close()
 	return true
 }
 
