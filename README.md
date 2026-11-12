@@ -47,6 +47,7 @@ portwhy 3000          # explain one port
 portwhy 3000 5432     # several ports
 portwhy 3000-3010     # a range
 portwhy               # every listening port
+portwhy --source docker  # only ports held by Docker containers
 portwhy 3000 --kill   # explain, then stop the cause after confirmation
 ```
 
@@ -62,6 +63,14 @@ $ portwhy 9000 59999
 
 When several processes hold the same port, each one gets its own block. Ranges and the all-ports list print only busy ports.
 
+The all-ports list ends with a footer that names the sources currently in use, so you can see what to filter by:
+
+```text
+Sources: docker (2) · launchd (1) · process (4) — filter with --source <name>
+```
+
+`--source` accepts `docker`, `systemd`, `launchd` and `process` (a plain process without a service). Repeat the flag or separate values with commas to combine them. With `--kill`, the filter also limits which ports are stopped.
+
 > [!TIP]
 > Add `--dry-run` to `--kill` to see exactly what would be executed without stopping anything.
 
@@ -75,6 +84,7 @@ When several processes hold the same port, each one gets its own block. Ranges a
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
 | 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
+| 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
 | 🎨 | `--no-color` | disable coloured output (`NO_COLOR` and non-TTY output are honoured too) |
 | 🏷️ | `-v`, `--version` | print the version |
