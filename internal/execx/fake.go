@@ -14,8 +14,9 @@ var ErrUnexpectedCommand = errors.New("unexpected command")
 var _ Runner = (*Fake)(nil)
 
 // Fake is a Runner for tests. Commands are matched by Key(name, args...):
-// Errors take precedence over Responses, and any other command fails with
-// ErrUnexpectedCommand. Fake records every call it receives.
+// a command listed in Errors fails with that error and still returns its
+// Responses entry (if any) as output, like a real command that prints before
+// failing; any other command fails with ErrUnexpectedCommand. Fake records every call it receives.
 type Fake struct {
 	Responses map[string][]byte
 	Errors    map[string]error
@@ -33,7 +34,7 @@ func (f *Fake) Run(_ context.Context, name string, args ...string) ([]byte, erro
 	f.mu.Unlock()
 
 	if err, ok := f.Errors[key]; ok {
-		return nil, err
+		return f.Responses[key], err
 	}
 	if out, ok := f.Responses[key]; ok {
 		return out, nil

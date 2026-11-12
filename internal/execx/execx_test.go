@@ -3,6 +3,7 @@ package execx
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -45,6 +46,22 @@ func TestRunner_NonZeroExitIncludesStderr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "boom") {
 		t.Errorf("error %q does not contain the command's stderr", err)
+	}
+}
+
+func TestRunner_NonZeroExitStillReturnsStdout(t *testing.T) {
+	r := NewRunner(5 * time.Second)
+
+	out, err := r.Run(context.Background(), "sh", "-c", "echo partial; exit 1")
+	if err == nil {
+		t.Fatal("Run returned nil error for a failing command")
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("error = %v, want one wrapping *exec.ExitError", err)
+	}
+	if got, want := string(out), "partial\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
 	}
 }
 
@@ -109,6 +126,22 @@ func TestFake_ConfiguredErrorIsReturned(t *testing.T) {
 
 	if _, err := f.Run(context.Background(), "docker", "ps"); !errors.Is(err, boom) {
 		t.Fatalf("error = %v, want %v", err, boom)
+	}
+}
+
+func TestFake_ConfiguredErrorKeepsConfiguredOutput(t *testing.T) {
+	boom := errors.New("boom")
+	f := &Fake{
+		Responses: map[string][]byte{"lsof -i": []byte("partial")},
+		Errors:    map[string]error{"lsof -i": boom},
+	}
+
+	out, err := f.Run(context.Background(), "lsof", "-i")
+	if !errors.Is(err, boom) {
+		t.Fatalf("error = %v, want %v", err, boom)
+	}
+	if string(out) != "partial" {
+		t.Errorf("stdout = %q, want %q", out, "partial")
 	}
 }
 

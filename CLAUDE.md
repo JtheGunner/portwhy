@@ -38,5 +38,5 @@ go run ./cmd/portwhy 3000
 
 ## Decisions on record
 
-- macOS socket/process data comes from an own `lsof`/`netstat`/`ps` parser; `gopsutil` is not used unless the parser proves fragile (decide in the macOS collector ticket and record the outcome here).
+- macOS socket data comes from an own `lsof`/`netstat` parser (`internal/socket`); `gopsutil` is not adopted. Spike outcome: it was not added or run (no network access), but from memory its macOS connection listing also shells out to `lsof` (unverified), so it would add a dependency without removing the external tool, and without root `lsof` sees only own processes either way, which the `netstat` merge (PID 0 for invisible owners) covers. Revisit only if the parser proves fragile. Process data (`ps`) follows in the process-reader ticket.
 - Podman and dev-server heuristics are v0.2; `wait`/`free` subcommands only if demand appears.
