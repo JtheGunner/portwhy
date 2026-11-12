@@ -118,7 +118,7 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 	for _, l := range joinWrapped(summaryParts(ov, c, g), " "+g.Dot+" ", room) {
 		fmt.Fprintln(b, tableIndent+l)
 	}
-	writeHint(b, ov, opts, limit)
+	writeHint(b, ov, opts, limit, true)
 }
 
 // overviewRows turns the groups and the hidden owners into table rows.
@@ -232,8 +232,14 @@ type portKey struct {
 	proto socket.Protocol
 }
 
-// summaryParts counts what the table lists.
-func summaryParts(ov overview, c Colors, g Glyphs) []string {
+// stats counts what an overview lists.
+type stats struct {
+	ports, services, exposed, hidden int
+}
+
+// overviewStats counts the busy ports, services, ports reachable from the
+// network and ports with a hidden owner of ov.
+func overviewStats(ov overview) stats {
 	ports, exposed, hidden := map[portKey]bool{}, map[portKey]bool{}, map[portKey]bool{}
 	for _, grp := range ov.Groups {
 		for _, r := range grp.Rows {
@@ -253,15 +259,21 @@ func summaryParts(ov overview, c Colors, g Glyphs) []string {
 			exposed[k] = true
 		}
 	}
+	return stats{len(ports), len(ov.Groups), len(exposed), len(hidden)}
+}
+
+// summaryParts words the stats for the one-line summary of the compact table.
+func summaryParts(ov overview, c Colors, g Glyphs) []string {
+	st := overviewStats(ov)
 	parts := []string{
-		c.number(fmt.Sprint(len(ports))) + plural(len(ports), " busy port", " busy ports"),
-		c.number(fmt.Sprint(len(ov.Groups))) + plural(len(ov.Groups), " service", " services"),
+		c.number(fmt.Sprint(st.ports)) + plural(st.ports, " busy port", " busy ports"),
+		c.number(fmt.Sprint(st.services)) + plural(st.services, " service", " services"),
 	}
-	if len(exposed) > 0 {
-		parts = append(parts, c.warn(g.Warn)+" "+c.number(fmt.Sprint(len(exposed)))+" reachable from the network")
+	if st.exposed > 0 {
+		parts = append(parts, c.warn(g.Warn)+" "+c.number(fmt.Sprint(st.exposed))+" reachable from the network")
 	}
-	if len(hidden) > 0 {
-		parts = append(parts, c.number(fmt.Sprint(len(hidden)))+plural(len(hidden), " port with hidden owner", " ports with hidden owner"))
+	if st.hidden > 0 {
+		parts = append(parts, c.number(fmt.Sprint(st.hidden))+plural(st.hidden, " port with hidden owner", " ports with hidden owner"))
 	}
 	return parts
 }
@@ -275,10 +287,13 @@ func plural(n int, singular, pluralForm string) string {
 }
 
 // writeHint writes the closing info line: where to look closer, how to get
-// the airy view and, when sources are known, how to filter by them.
-func writeHint(b *strings.Builder, ov overview, opts Options, limit int) {
+// the airy view (airyHint) and, when sources are known, how to filter by them.
+func writeHint(b *strings.Builder, ov overview, opts Options, limit int, airyHint bool) {
 	c, g := opts.Colors, opts.glyphs()
-	text := fmt.Sprintf("Details: portwhy %d    Airy view: --expanded", lowestPort(ov))
+	text := fmt.Sprintf("Details: portwhy %d", lowestPort(ov))
+	if airyHint {
+		text += "    Airy view: --expanded"
+	}
 	if len(opts.Sources) > 0 {
 		names := make([]string, len(opts.Sources))
 		for i, s := range opts.Sources {

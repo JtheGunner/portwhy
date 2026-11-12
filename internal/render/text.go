@@ -17,6 +17,10 @@ type Options struct {
 	Wide bool
 	// Overview selects the grouped list layout instead of detail blocks.
 	Overview bool
+	// Expanded selects the airy overview, with a titled rule per service and
+	// one row per port, instead of the compact table. It only applies together
+	// with Overview.
+	Expanded bool
 	// ASCII replaces the Unicode symbols and line characters by plain ASCII.
 	ASCII bool
 	// Sources are the sources found before any --source filter; the overview
@@ -43,9 +47,12 @@ func UseASCII(getenv func(string) string) bool {
 // blocks, one per service or process holding a port.
 func Text(w io.Writer, reports []report.PortReport, opts Options) error {
 	var b strings.Builder
-	if opts.Overview {
+	switch {
+	case opts.Overview && opts.Expanded:
+		writeExpanded(&b, reports, opts)
+	case opts.Overview:
 		writeOverview(&b, reports, opts)
-	} else {
+	default:
 		for _, r := range reports {
 			writeDetail(&b, r, opts)
 		}
