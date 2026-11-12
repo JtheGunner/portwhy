@@ -477,3 +477,26 @@ func TestProcessTerminator_HostileNameCannotSpoofPromptOrErrors(t *testing.T) {
 	err = Run(context.Background(), mk(4242, &fakeSignaler{}), 3000, withYes(o), freePort)
 	noControl("still running message", err.Error())
 }
+
+func TestRun_DryRunNamesProtectionReason(t *testing.T) {
+	for _, pid := range []int{1, 99} {
+		p := proc.Process{PID: pid, Name: "init", Started: started}
+		sig := &fakeSignaler{}
+		term := NewProcessTerminator(p, fakeReader{p: p}, 99, sig)
+		o, out := options("", false)
+		o.DryRun = true
+
+		if err := Run(context.Background(), term, 3000, o, busyPort); err != nil {
+			t.Fatalf("pid %d: err = %v, want nil", pid, err)
+		}
+		if strings.Contains(out.String(), "would execute") {
+			t.Errorf("pid %d: output %q claims it would execute", pid, out.String())
+		}
+		if !strings.Contains(out.String(), "refusing to stop a protected process") {
+			t.Errorf("pid %d: output %q does not name the protection", pid, out.String())
+		}
+		if len(sig.sent) != 0 {
+			t.Errorf("pid %d: signals sent: %v", pid, sig.sent)
+		}
+	}
+}

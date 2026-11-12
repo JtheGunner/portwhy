@@ -405,8 +405,7 @@ func TestRun_KillWithoutTTYAndWithoutYesExit3(t *testing.T) {
 func TestRun_KillNeedsStdinTTYToo(t *testing.T) {
 	ft := &fakeTerminator{describe: "x"}
 	d, _ := killDeps(ft, &freeingSockets{})
-	d.IsTTY = true
-	d.StdinIsTTY = false
+	d.StdinIsTTY, d.StderrIsTTY = false, true
 	d.Stdin = strings.NewReader("y\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 3 {
@@ -421,7 +420,7 @@ func TestRun_KillPromptAccepted(t *testing.T) {
 	c := &freeingSockets{}
 	ft := &fakeTerminator{describe: "x", onTerm: func() { c.freed = true }}
 	d, _ := killDeps(ft, c)
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("y\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
@@ -435,7 +434,7 @@ func TestRun_KillPromptAccepted(t *testing.T) {
 func TestRun_KillDeclinedIsNotAFailure(t *testing.T) {
 	ft := &fakeTerminator{describe: "x"}
 	d, _ := killDeps(ft, &freeingSockets{})
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("n\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
@@ -640,7 +639,7 @@ func TestRun_KillReportsStatusLinesAndAResultBox(t *testing.T) {
 
 func TestRun_KillDeclinedShowsLeftUntouched(t *testing.T) {
 	d, stderr := killDeps(&fakeTerminator{describe: "x"}, &freeingSockets{})
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("n\n")
 
 	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true})
@@ -683,5 +682,47 @@ func TestRootCmd_ExpandedFlagIsParsed(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), " Summary ") {
 		t.Errorf("--expanded not applied:\n%s", stdout.String())
+	}
+}
+
+func TestRun_KillNeedsStderrTTYForPrompt(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, _ := killDeps(ft, &freeingSockets{})
+	d.IsTTY, d.StdinIsTTY, d.StderrIsTTY = true, true, false
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+}
+
+func TestRun_KillPromptDoesNotNeedStdoutTTY(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "x", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(ft, c)
+	d.IsTTY, d.StdinIsTTY, d.StderrIsTTY = false, true, true
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 1 {
+		t.Errorf("Terminate calls = %d, want 1", ft.calls)
+	}
+}
+
+func TestRun_KillDryRunInvisibleOwnerIsAHintNotAFailure(t *testing.T) {
+	d, stderr := killDeps(nil, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, DryRun: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0 (busy and explained, no kill failure)", got)
+	}
+	if !strings.Contains(stderr.String(), "not visible") {
+		t.Errorf("stderr = %q, want a hint about the invisible owner", stderr.String())
 	}
 }
