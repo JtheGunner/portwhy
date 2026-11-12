@@ -75,7 +75,7 @@ Issues and pull requests are welcome. Please open an issue first for larger chan
 
 ## 📄 License
 
-[MIT](LICENSE)
+MIT — see [LICENSE](./LICENSE)
 
 ---
 
