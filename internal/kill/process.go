@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/JtheGunner/portwhy/internal/proc"
+	"github.com/JtheGunner/portwhy/internal/textutil"
 )
 
 const alivePollInterval = 20 * time.Millisecond
@@ -52,6 +53,10 @@ func NewProcessTerminator(p proc.Process, r proc.Reader, self int, sig Signaler)
 	return &processTerminator{target: p, reader: r, self: self, sig: sig}
 }
 
+// name is the target's process name made safe for the terminal: it reaches the
+// confirmation prompt and error messages and is controlled by the process.
+func (t *processTerminator) name() string { return textutil.Clean(t.target.Name) }
+
 func (t *processTerminator) withOptions(o Options) Terminator {
 	c := *t
 	c.opts = o
@@ -63,7 +68,7 @@ func (t *processTerminator) Describe() string {
 	if t.opts.Force {
 		flag = "-KILL"
 	}
-	return fmt.Sprintf("kill %s %d (%s)", flag, t.target.PID, t.target.Name)
+	return fmt.Sprintf("kill %s %d (%s)", flag, t.target.PID, t.name())
 }
 
 // preflight refuses protected or changed targets before anything is asked.
@@ -81,7 +86,7 @@ func (t *processTerminator) preflight(ctx context.Context) error {
 func (t *processTerminator) check(ctx context.Context) error {
 	pid := t.target.PID
 	if pid <= 1 || pid == t.self {
-		return fmt.Errorf("PID %d (%s): %w", pid, t.target.Name, ErrProtected)
+		return fmt.Errorf("PID %d (%s): %w", pid, t.name(), ErrProtected)
 	}
 	if t.target.Started.IsZero() {
 		return fmt.Errorf("PID %d: start time unknown: %w", pid, ErrStale)
@@ -150,7 +155,7 @@ func (t *processTerminator) sendAndWait(ctx context.Context, s syscall.Signal) e
 			return nil
 		case errors.Is(err, syscall.EPERM):
 			return fmt.Errorf("not permitted to signal PID %d (%s): rerun portwhy with sudo to stop it: %w",
-				pid, t.target.Name, err)
+				pid, t.name(), err)
 		default:
 			return fmt.Errorf("signalling PID %d: %w", pid, err)
 		}
@@ -162,10 +167,17 @@ func (t *processTerminator) sendAndWait(ctx context.Context, s syscall.Signal) e
 			return nil
 		}
 		if !time.Now().Before(deadline) {
-			return fmt.Errorf("PID %d (%s) %w after %s", pid, t.target.Name, errStillRunning, s)
+			return fmt.Errorf("PID %d (%s) %w after %s", pid, t.name(), errStillRunning, signalName(s))
 		}
 		if err := sleep(ctx, alivePollInterval); err != nil {
 			return err
 		}
 	}
+}
+
+func signalName(s syscall.Signal) string {
+	if s == syscall.SIGKILL {
+		return "SIGKILL"
+	}
+	return "SIGTERM"
 }

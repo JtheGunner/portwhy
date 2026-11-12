@@ -436,3 +436,44 @@ func TestProcessTerminator_TerminateWithoutTTYOrYesNeverEscalates(t *testing.T) 
 		t.Errorf("signals = %v, want only [SIGTERM]", got)
 	}
 }
+
+// The process name is controlled by whoever started the process. It reaches the
+// confirmation prompt and error messages, so it must not carry control
+// characters that could rewrite what the user is asked to confirm.
+func TestProcessTerminator_HostileNameCannotSpoofPromptOrErrors(t *testing.T) {
+	const hostile = "safe\x1b[2K\rkill -TERM 1 (init)\x07"
+	p := proc.Process{PID: 4242, Name: hostile, Started: started}
+	mk := func(pid int, sig Signaler) Terminator {
+		q := p
+		q.PID = pid
+		return NewProcessTerminator(q, fakeReader{p: q}, 99, sig)
+	}
+	noControl := func(label, s string) {
+		t.Helper()
+		for _, r := range s {
+			if r < 0x20 && r != '\n' || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+				t.Errorf("%s contains control character %q: %q", label, r, s)
+				return
+			}
+		}
+	}
+
+	noControl("Describe", mk(4242, &fakeSignaler{}).Describe())
+
+	// Prompt text.
+	o, out := options("n\n", true)
+	_ = Run(context.Background(), mk(4242, &fakeSignaler{}), 3000, o, freePort)
+	noControl("prompt", strings.TrimSuffix(out.String(), "\n"))
+
+	// Protected PID.
+	err := Run(context.Background(), mk(1, &fakeSignaler{}), 3000, withYes(o), freePort)
+	noControl("ErrProtected message", err.Error())
+
+	// EPERM hint.
+	err = Run(context.Background(), mk(4242, &fakeSignaler{sendErr: syscall.EPERM}), 3000, withYes(o), freePort)
+	noControl("EPERM message", err.Error())
+
+	// Process survives SIGKILL.
+	err = Run(context.Background(), mk(4242, &fakeSignaler{}), 3000, withYes(o), freePort)
+	noControl("still running message", err.Error())
+}
