@@ -2,3 +2,6 @@
 
   ℹ  tcp ::
 
+  ⚠  Reachable from the network (bound to all interfaces).
+  ℹ  Owner not visible. Run with sudo for details.
+
