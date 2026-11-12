@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/JtheGunner/portwhy/internal/detect"
@@ -232,5 +233,45 @@ func TestService_NilDetectorFallsBackToGeneric(t *testing.T) {
 
 	if got[0].Findings[0].Explanation.Title != "x" {
 		t.Errorf("Title = %q, want x", got[0].Findings[0].Explanation.Title)
+	}
+}
+
+func TestReport_TimeWaitOnlyPortIsFreeButAdvised(t *testing.T) {
+	svc := service([]socket.Socket{sock(3000, socket.TimeWait, "127.0.0.1", 0)}, &fakeReader{})
+
+	got, err := svc.Explain(context.Background(), []uint16{3000})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got[0].Findings) != 0 || !got[0].TimeWaitOnly {
+		t.Fatalf("Explain() = %+v, want free TIME_WAIT-only port", got)
+	}
+	if len(got[0].Advice) != 1 || !strings.Contains(got[0].Advice[0].Text, "TIME_WAIT") {
+		t.Errorf("Advice = %+v, want TIME_WAIT hint", got[0].Advice)
+	}
+}
+
+func TestReport_FindingGetsAdvice(t *testing.T) {
+	svc := service([]socket.Socket{sock(3000, socket.Listen, "0.0.0.0", 0)}, &fakeReader{})
+
+	got, _ := svc.Explain(context.Background(), []uint16{3000})
+
+	if n := len(got[0].Findings[0].Advice); n != 2 {
+		t.Errorf("advice count = %d, want exposed bind + owner not visible", n)
+	}
+}
+
+func TestReport_AirPlayUsesInjectedGOOS(t *testing.T) {
+	r := &fakeReader{procs: map[int]proc.Process{9: {PID: 9, Name: "ControlCenter"}}}
+	for goos, want := range map[string]bool{"darwin": true, "linux": false} {
+		svc := service([]socket.Socket{sock(5000, socket.Listen, "127.0.0.1", 9)}, r)
+		svc.GOOS = goos
+
+		got, _ := svc.Explain(context.Background(), []uint16{5000})
+
+		if has := len(got[0].Findings[0].Advice) == 1; has != want {
+			t.Errorf("%s: advice = %+v, want airplay=%v", goos, got[0].Findings[0].Advice, want)
+		}
 	}
 }

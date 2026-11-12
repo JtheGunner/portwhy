@@ -240,3 +240,22 @@ func TestText_ControlCharactersInExternalStringsAreNeutralised(t *testing.T) {
 		}
 	}
 }
+
+func timeWaitAdviceReport() report.PortReport {
+	return report.PortReport{
+		Port: 3000, TimeWaitOnly: true,
+		Advice: []advise.Advice{{Level: advise.Info, Text: "Nobody is listening; the port is in TIME_WAIT. Wait for it to clear or bind with SO_REUSEADDR."}},
+	}
+}
+
+func TestText_TimeWaitOnlyWithAdvice(t *testing.T) {
+	golden(t, "text_time_wait_advice.golden", renderText(t, Colors{}, timeWaitAdviceReport()))
+}
+
+func TestJSON_TimeWaitOnlyWithAdvice(t *testing.T) {
+	var b bytes.Buffer
+	if err := JSON(&b, []report.PortReport{timeWaitAdviceReport()}); err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "json_time_wait_advice.golden", b.Bytes())
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "ports": [
+    {
+      "port": 3000,
+      "state": "free",
+      "timeWaitOnly": true,
+      "findings": [],
+      "advice": [
+        {
+          "level": "info",
+          "text": "Nobody is listening; the port is in TIME_WAIT. Wait for it to clear or bind with SO_REUSEADDR."
+        }
+      ]
+    }
+  ]
+}

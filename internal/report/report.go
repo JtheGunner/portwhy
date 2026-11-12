@@ -5,6 +5,7 @@ package report
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"slices"
 
 	"github.com/JtheGunner/portwhy/internal/advise"
@@ -23,18 +24,22 @@ type Finding struct {
 }
 
 // PortReport is the result for one port. A port without findings is free;
-// TimeWaitOnly is set when only lingering time_wait sockets exist.
+// TimeWaitOnly is set when only lingering time_wait sockets exist; Advice then
+// holds the port-level hints for that free port.
 type PortReport struct {
 	Port         uint16
 	Findings     []Finding
 	TimeWaitOnly bool
+	Advice       []advise.Advice
 }
 
-// Service builds port reports. A nil Detector falls back to detect.Generic.
+// Service builds port reports. A nil Detector falls back to detect.Generic and
+// an empty GOOS to runtime.GOOS.
 type Service struct {
 	Sockets  socket.Collector
 	Procs    proc.Reader
 	Detector detect.Detector
+	GOOS     string
 }
 
 // Explain reports on the given ports in ascending order. A nil ports slice
@@ -62,32 +67,42 @@ func (s Service) Explain(ctx context.Context, ports []uint16) ([]PortReport, err
 		detector = detect.Generic()
 	}
 
+	goos := s.GOOS
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+
 	reports := make([]PortReport, 0, len(ports))
 	for _, port := range ports {
 		r := PortReport{Port: port}
-		sawTimeWait := false
+		var timeWait *socket.Socket
 		for _, sk := range all {
 			if sk.Port != port {
 				continue
 			}
 			switch sk.State {
 			case socket.TimeWait:
-				sawTimeWait = true
+				if timeWait == nil {
+					timeWait = &sk
+				}
 			case socket.Listen:
-				f, err := s.finding(ctx, detector, sk, all)
+				f, err := s.finding(ctx, detector, goos, sk, all)
 				if err != nil {
 					return nil, err
 				}
 				r.Findings = append(r.Findings, f)
 			}
 		}
-		r.TimeWaitOnly = len(r.Findings) == 0 && sawTimeWait
+		if len(r.Findings) == 0 && timeWait != nil {
+			r.TimeWaitOnly = true
+			r.Advice = advise.Advise(advise.Input{GOOS: goos, Socket: *timeWait, All: all})
+		}
 		reports = append(reports, r)
 	}
 	return reports, nil
 }
 
-func (s Service) finding(ctx context.Context, d detect.Detector, sk socket.Socket, all []socket.Socket) (Finding, error) {
+func (s Service) finding(ctx context.Context, d detect.Detector, goos string, sk socket.Socket, all []socket.Socket) (Finding, error) {
 	p, err := s.readProcess(ctx, sk.PID)
 	if err != nil {
 		return Finding{}, err
@@ -98,6 +113,7 @@ func (s Service) finding(ctx context.Context, d detect.Detector, sk socket.Socke
 		f.Explanation = *e
 	}
 	f.Advice = advise.Advise(advise.Input{
+		GOOS:    goos,
 		Socket:  sk,
 		Process: p,
 		Source:  f.Explanation.Source,

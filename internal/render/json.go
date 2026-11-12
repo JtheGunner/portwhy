@@ -23,6 +23,7 @@ type jsonPort struct {
 	State        string        `json:"state"`
 	TimeWaitOnly bool          `json:"timeWaitOnly,omitempty"`
 	Findings     []jsonFinding `json:"findings"`
+	Advice       []jsonAdvice  `json:"advice,omitempty"`
 }
 
 type jsonFinding struct {
@@ -91,6 +92,7 @@ func toJSONPort(r report.PortReport) jsonPort {
 	for _, f := range r.Findings {
 		p.Findings = append(p.Findings, toJSONFinding(f))
 	}
+	p.Advice = toJSONAdvice(r.Advice)
 	return p
 }
 
@@ -108,13 +110,7 @@ func toJSONFinding(f report.Finding) jsonFinding {
 	for _, d := range f.Explanation.Details {
 		out.Details = append(out.Details, jsonDetail{Key: d.Key, Value: d.Value})
 	}
-	for _, a := range f.Advice {
-		level := "info"
-		if a.Level == advise.Warn {
-			level = "warn"
-		}
-		out.Advice = append(out.Advice, jsonAdvice{Level: level, Text: a.Text})
-	}
+	out.Advice = append(out.Advice, toJSONAdvice(f.Advice)...)
 	if f.Explanation.Terminator != nil {
 		out.Terminate = &jsonTerminate{Command: f.Explanation.Terminator.Describe()}
 	}
@@ -130,6 +126,18 @@ func toJSONFinding(f report.Finding) jsonFinding {
 			jp.Ancestors = append(jp.Ancestors, jsonAncestor{PID: a.PID, Name: a.Name})
 		}
 		out.Process = jp
+	}
+	return out
+}
+
+func toJSONAdvice(advice []advise.Advice) []jsonAdvice {
+	var out []jsonAdvice
+	for _, a := range advice {
+		level := "info"
+		if a.Level == advise.Warn {
+			level = "warn"
+		}
+		out = append(out, jsonAdvice{Level: level, Text: a.Text})
 	}
 	return out
 }
