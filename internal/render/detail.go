@@ -90,11 +90,14 @@ func writeBlock(b *strings.Builder, findings []report.Finding, opts Options) {
 	slices.SortStableFunc(findings, func(x, y report.Finding) int { return cmp.Compare(pidOf(x), pidOf(y)) })
 	primary := findings[0]
 
-	fmt.Fprintf(b, "%s  %s %s  %s\n",
-		c.bold(fmt.Sprintf(":%d", primary.Socket.Port)),
-		textutil.Clean(strings.ToUpper(string(primary.Socket.Protocol))),
-		primary.Socket.Addr,
-		c.bold(headline(primary)))
+	port := fmt.Sprintf(":%d", primary.Socket.Port)
+	where := fmt.Sprintf("%s %s", textutil.Clean(strings.ToUpper(string(primary.Socket.Protocol))), primary.Socket.Addr)
+	title := headline(primary)
+	if opts.Width > 0 && !opts.Wide {
+		prefix := utf8.RuneCountInString(port) + len(labelGap) + utf8.RuneCountInString(where) + len(labelGap)
+		title = fit(title, max(opts.Width-prefix, minProcessWidth))
+	}
+	fmt.Fprintf(b, "%s%s%s%s%s\n", c.bold(port), labelGap, where, labelGap, c.bold(title))
 
 	rows := blockRows(findings, c)
 	labelWidth := 0
@@ -173,7 +176,7 @@ func blockRows(findings []report.Finding, c Colors) []detailRow {
 		if n := len(findings) - 1; n > 0 {
 			value += fmt.Sprintf(" +%d more", n)
 		}
-		rows = append(rows, detailRow{label: labelProcess, value: value})
+		rows = append(rows, detailRow{label: labelProcess, value: value, shorten: true})
 	}
 
 	rows = append(rows, detailRows(primary.Explanation.Details)...)

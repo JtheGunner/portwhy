@@ -123,3 +123,26 @@ func TestText_OverviewCapsLongPortLists(t *testing.T) {
 		t.Errorf("--wide must list every port:\n%s", wide)
 	}
 }
+
+func TestText_OverviewKeepsThePIDWhenShortening(t *testing.T) {
+	out := string(renderOverview(t, Options{Width: 60}, reportOf(
+		finding(80, socket.TCP, "0.0.0.0", 4242, strings.Repeat("longname", 10), detect.SourceLaunchd, "svc"),
+	)))
+
+	if !strings.Contains(out, "(PID 4242)") || !strings.Contains(out, "…") {
+		t.Errorf("want the name shortened and the PID kept:\n%s", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if n := utf8.RuneCountInString(line); n > 60 {
+			t.Errorf("line of %d runes exceeds width 60: %q", n, line)
+		}
+	}
+}
+
+func TestText_OverviewEveryLineFitsAtWidth80(t *testing.T) {
+	for _, line := range strings.Split(string(renderOverview(t, Options{Width: 80}, overviewFixture())), "\n") {
+		if n := utf8.RuneCountInString(line); n > 80 {
+			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
+		}
+	}
+}

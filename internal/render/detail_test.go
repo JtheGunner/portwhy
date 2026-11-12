@@ -188,3 +188,23 @@ func TestText_DetailWrappingKeepsTheWholeHint(t *testing.T) {
 		t.Errorf("the stop command must stay on one line:\n%s", buf.String())
 	}
 }
+
+func TestText_DetailLongHeadlineAndProcessNameFitTheWidth(t *testing.T) {
+	long := strings.Repeat("very-long-name-", 8)
+	r := serviceWorkersReport()
+	for i := range r.Findings {
+		r.Findings[i].Explanation.Title = `Docker container "` + long + `" (registry.example.com/team/image:latest)`
+		r.Findings[i].Process.Name = long
+	}
+	var buf strings.Builder
+
+	if err := Text(&buf, []report.PortReport{r, processReport()}, Options{Width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if n := utf8.RuneCountInString(line); n > 80 {
+			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
+		}
+	}
+}

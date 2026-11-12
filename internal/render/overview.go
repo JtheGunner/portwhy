@@ -14,6 +14,8 @@ import (
 const (
 	// minProcessWidth is the narrowest the process column is shortened to.
 	minProcessWidth = 8
+	// minNameWidth is the fewest runes of a process name the overview keeps.
+	minNameWidth = 4
 	// maxHiddenPorts bounds the ports named in the hidden-owner summary.
 	maxHiddenPorts = 8
 	// maxPortsWidth bounds the ports column; --wide lifts the bound.
@@ -60,7 +62,7 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 			if r.Exposed {
 				marker = c.paint(ansiYellow, exposedTag)
 			}
-			proc := fit(processLabel(g, r), processWidth(limit, len(prefix)))
+			proc := processLabel(g, r, processWidth(limit, len(prefix)))
 			fmt.Fprintf(b, "%s%s%s%s%s%s%s%s%s\n", rowIndent, c.bold(ports), columnGap, r.Protocol, columnGap, padRight(r.Addr.String(), addrW), columnGap, marker, columnGap+proc)
 		}
 	}
@@ -80,16 +82,29 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 }
 
 // processLabel names the owner of a row: "name (PID n)" below a service title,
-// "PID n" below a plain process name, plus a count of further PIDs.
-func processLabel(g group, r row) string {
-	label := fmt.Sprintf("PID %d", r.PIDs[0])
-	if g.Source != detect.SourceProcess {
-		label = fmt.Sprintf("%s (PID %d)", textutil.Clean(r.Name), r.PIDs[0])
-	}
+// "PID n" below a plain process name, plus a count of further PIDs. When the
+// label is wider than width (0 means unlimited) the name is shortened and the
+// PID is kept.
+func processLabel(g group, r row, width int) string {
+	more := ""
 	if n := len(r.PIDs) - 1; n > 0 {
-		label += fmt.Sprintf(" +%d more", n)
+		more = fmt.Sprintf(" +%d more", n)
 	}
-	return label
+	if g.Source == detect.SourceProcess {
+		pid := fmt.Sprintf("PID %d", r.PIDs[0])
+		if width > 0 {
+			width = max(width, utf8.RuneCountInString(pid))
+		}
+		return fit(pid+more, width)
+	}
+	name := textutil.Clean(r.Name)
+	suffix := fmt.Sprintf(" (PID %d)", r.PIDs[0]) + more
+	if width <= 0 {
+		return name + suffix
+	}
+	// The PID is never cut; the name keeps at least minNameWidth runes.
+	room := max(width-utf8.RuneCountInString(suffix), minNameWidth)
+	return fit(name, room) + suffix
 }
 
 // processWidth is the room left for the process column; 0 means unlimited.
