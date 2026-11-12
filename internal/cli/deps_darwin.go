@@ -18,13 +18,16 @@ const commandTimeout = 10 * time.Second
 // DefaultDeps wires the real macOS collectors and readers.
 func DefaultDeps() Deps {
 	runner := execx.NewRunner(commandTimeout)
+	procs := proc.NewDarwinReader(runner)
 	return Deps{
-		Sockets:  socket.NewDarwinCollector(runner),
-		Procs:    proc.NewDarwinReader(runner),
-		Detector: detect.Chain(detect.Generic()),
-		Stdout:   os.Stdout,
-		Stderr:   os.Stderr,
-		IsTTY:    isTerminal(os.Stdout),
-		Pid:      os.Getpid(),
+		Sockets:    socket.NewDarwinCollector(runner),
+		Procs:      procs,
+		Detector:   detect.Chain(detect.NewGeneric(procs, os.Getpid())),
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		IsTTY:      isTerminal(os.Stdout),
+		Stdin:      os.Stdin,
+		StdinIsTTY: isTerminal(os.Stdin),
+		Pid:        os.Getpid(),
 	}
 }

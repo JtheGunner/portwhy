@@ -12,13 +12,16 @@ import (
 
 // DefaultDeps wires the real Linux collectors and readers.
 func DefaultDeps() Deps {
+	procs := proc.NewReader("")
 	return Deps{
-		Sockets:  socket.NewCollector(""),
-		Procs:    proc.NewReader(""),
-		Detector: detect.Chain(detect.Generic()),
-		Stdout:   os.Stdout,
-		Stderr:   os.Stderr,
-		IsTTY:    isTerminal(os.Stdout),
-		Pid:      os.Getpid(),
+		Sockets:    socket.NewCollector(""),
+		Procs:      procs,
+		Detector:   detect.Chain(detect.NewGeneric(procs, os.Getpid())),
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		IsTTY:      isTerminal(os.Stdout),
+		Stdin:      os.Stdin,
+		StdinIsTTY: isTerminal(os.Stdin),
+		Pid:        os.Getpid(),
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/JtheGunner/portwhy/internal/detect"
+	"github.com/JtheGunner/portwhy/internal/kill"
 	"github.com/JtheGunner/portwhy/internal/proc"
 	"github.com/JtheGunner/portwhy/internal/socket"
 )
@@ -304,4 +305,212 @@ func TestRootCmd_YesWithoutKillExit2(t *testing.T) {
 	if *exit != 2 {
 		t.Errorf("exit = %d, want 2", *exit)
 	}
+}
+
+type fakeTerminator struct {
+	err      error
+	calls    int
+	onTerm   func()
+	describe string
+}
+
+func (f *fakeTerminator) Describe() string { return f.describe }
+func (f *fakeTerminator) Terminate(context.Context) error {
+	f.calls++
+	if f.onTerm != nil {
+		f.onTerm()
+	}
+	return f.err
+}
+
+// fixedDetector explains every socket with the given terminator.
+type fixedDetector struct{ t kill.Terminator }
+
+func (f fixedDetector) Detect(context.Context, socket.Socket, *proc.Process) (*detect.Explanation, bool) {
+	return &detect.Explanation{Source: detect.SourceProcess, Title: "node", Terminator: f.t}, true
+}
+
+// freeingSockets reports a listener until free() is called.
+type freeingSockets struct{ freed bool }
+
+func (f *freeingSockets) Sockets(context.Context) ([]socket.Socket, error) {
+	if f.freed {
+		return nil, nil
+	}
+	return []socket.Socket{listener(3000, 42)}, nil
+}
+
+func killDeps(t kill.Terminator, c socket.Collector) (Deps, *bytes.Buffer) {
+	d, _, stderr := testDeps(fakeSockets{})
+	d.Sockets = c
+	d.Detector = fixedDetector{t}
+	return d, stderr
+}
+
+func TestRun_KillYesStopsAndExit0(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "kill -TERM 42", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(ft, c)
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 1 {
+		t.Errorf("Terminate calls = %d, want 1", ft.calls)
+	}
+}
+
+func TestRun_KillStillBusyExit3(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, stderr := killDeps(ft, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if !strings.Contains(stderr.String(), "still busy") {
+		t.Errorf("stderr = %q, want the still-busy error", stderr.String())
+	}
+}
+
+func TestRun_KillTerminateErrorExit3(t *testing.T) {
+	ft := &fakeTerminator{describe: "x", err: errors.New("boom")}
+	d, _ := killDeps(ft, &freeingSockets{})
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true}); got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+}
+
+func TestRun_KillWithoutTTYAndWithoutYesExit3(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, stderr := killDeps(ft, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true})
+
+	if got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+	if !strings.Contains(stderr.String(), "--yes") {
+		t.Errorf("stderr = %q, want a hint about --yes", stderr.String())
+	}
+}
+
+func TestRun_KillNeedsStdinTTYToo(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, _ := killDeps(ft, &freeingSockets{})
+	d.IsTTY = true
+	d.StdinIsTTY = false
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+}
+
+func TestRun_KillPromptAccepted(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "x", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(ft, c)
+	d.IsTTY, d.StdinIsTTY = true, true
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 1 {
+		t.Errorf("Terminate calls = %d, want 1", ft.calls)
+	}
+}
+
+func TestRun_KillDeclinedIsNotAFailure(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, _ := killDeps(ft, &freeingSockets{})
+	d.IsTTY, d.StdinIsTTY = true, true
+	d.Stdin = strings.NewReader("n\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+}
+
+func TestRun_KillDryRunNeverTerminates(t *testing.T) {
+	ft := &fakeTerminator{describe: "kill -TERM 42"}
+	d, stderr := killDeps(ft, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, DryRun: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+	if !strings.Contains(stderr.String(), "kill -TERM 42") {
+		t.Errorf("stderr = %q, want the command", stderr.String())
+	}
+}
+
+func TestRun_KillWithoutTerminatorExit3(t *testing.T) {
+	d, stderr := killDeps(nil, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if !strings.Contains(stderr.String(), "sudo") {
+		t.Errorf("stderr = %q, want a sudo hint", stderr.String())
+	}
+}
+
+func TestRun_KillSkipsFreePorts(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, _ := killDeps(ft, &freeingSockets{freed: true})
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true}); got != 1 {
+		t.Errorf("exit = %d, want 1", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+}
+
+func TestRun_KillTerminatesSharedCauseOnce(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "kill -TERM 42", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(ft, c)
+	d.Sockets = twoSockets{c}
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true}); got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 1 {
+		t.Errorf("Terminate calls = %d, want 1", ft.calls)
+	}
+}
+
+// twoSockets lists the same process twice (IPv4 and IPv6) until freed.
+type twoSockets struct{ c *freeingSockets }
+
+func (s twoSockets) Sockets(ctx context.Context) ([]socket.Socket, error) {
+	all, err := s.c.Sockets(ctx)
+	if len(all) == 0 {
+		return all, err
+	}
+	v6 := all[0]
+	v6.Addr = netip.MustParseAddr("::1")
+	return append(all, v6), err
 }

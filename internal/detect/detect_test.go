@@ -2,6 +2,7 @@ package detect
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,5 +139,30 @@ func TestFormatUptime(t *testing.T) {
 		if got := formatUptime(tt.in); got != tt.want {
 			t.Errorf("formatUptime(%v) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+type fakeProcReader struct{}
+
+func (fakeProcReader) Read(context.Context, int) (proc.Process, error) { return proc.Process{}, nil }
+
+func TestGeneric_WithKillSupportReturnsProcessTerminator(t *testing.T) {
+	p := &proc.Process{PID: 4242, Name: "node", Started: time.Unix(1700000000, 0)}
+
+	got, ok := NewGeneric(fakeProcReader{}, 99).Detect(context.Background(), socket.Socket{Port: 3000, PID: 4242}, p)
+
+	if !ok || got.Terminator == nil {
+		t.Fatalf("Detect() = %+v, %v; want a Terminator", got, ok)
+	}
+	if d := got.Terminator.Describe(); !strings.Contains(d, "4242") {
+		t.Errorf("Describe = %q, want the PID", d)
+	}
+}
+
+func TestGeneric_NoTerminatorWithoutProcess(t *testing.T) {
+	got, _ := NewGeneric(fakeProcReader{}, 99).Detect(context.Background(), socket.Socket{Port: 22}, nil)
+
+	if got.Terminator != nil {
+		t.Errorf("Terminator = %v, want nil for an invisible owner", got.Terminator)
 	}
 }
