@@ -32,6 +32,7 @@ func DefaultDeps() Deps {
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
 		IsTTY:      isTerminal(os.Stdout),
+		Width:      terminalWidth(os.Stdout),
 		Stdin:      os.Stdin,
 		StdinIsTTY: isTerminal(os.Stdin),
 		Pid:        os.Getpid(),

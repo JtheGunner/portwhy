@@ -25,12 +25,25 @@ type Deps struct {
 	// Stdin. Prompts need both.
 	IsTTY      bool
 	StdinIsTTY bool
-	Pid        int
+	// Width is the terminal width of Stdout in columns; 0 when Stdout is not a
+	// terminal or its size is unknown.
+	Width int
+	Pid   int
 }
 
 // isTerminal reports whether f is attached to a terminal.
 func isTerminal(f *os.File) bool {
 	return term.IsTerminal(int(f.Fd()))
+}
+
+// terminalWidth returns the width of the terminal f is attached to, or 0 when
+// f is not a terminal or its size cannot be read.
+func terminalWidth(f *os.File) int {
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil || width < 0 {
+		return 0
+	}
+	return width
 }
 
 // newDetector builds the detector chain: Docker first when a daemon socket

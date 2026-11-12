@@ -112,8 +112,8 @@ func TestRun_NoArgsListsAllListening(t *testing.T) {
 		t.Errorf("exit = %d, want 0", got)
 	}
 	out := stdout.String()
-	if i, j := strings.Index(out, ":3000"), strings.Index(out, ":8080"); i < 0 || j < 0 || i > j {
-		t.Errorf("stdout = %q, want :3000 then :8080", out)
+	if i, j := strings.Index(out, "3000"), strings.Index(out, "8080"); i < 0 || j < 0 || i > j {
+		t.Errorf("stdout = %q, want 3000 then 8080", out)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestRun_RangeHidesFreePorts(t *testing.T) {
 		t.Errorf("exit = %d, want 0", got)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, ":3002") {
+	if !strings.Contains(out, "3002") {
 		t.Errorf("stdout = %q, want busy port 3002", out)
 	}
 	if strings.Contains(out, "free") {
@@ -513,4 +513,110 @@ func (s twoSockets) Sockets(ctx context.Context) ([]socket.Socket, error) {
 	v6 := all[0]
 	v6.Addr = netip.MustParseAddr("::1")
 	return append(all, v6), err
+}
+
+func TestRun_NoArgsUsesOverview(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(8080, 7), listener(3000, 42)}})
+
+	Run(context.Background(), d, nil, Flags{})
+
+	if out := stdout.String(); !strings.Contains(out, "Details: portwhy 3000") || strings.Contains(out, ":3000") {
+		t.Errorf("stdout = %q, want the overview with a details hint", out)
+	}
+}
+
+func TestRun_RangeUsesOverview(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3002, 42)}})
+
+	Run(context.Background(), d, []string{"3000-3005"}, Flags{})
+
+	if !strings.Contains(stdout.String(), "Details: portwhy 3002") {
+		t.Errorf("stdout = %q, want the overview", stdout.String())
+	}
+}
+
+func TestRun_ExplicitPortUsesDetail(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	Run(context.Background(), d, []string{"3000"}, Flags{})
+
+	if out := stdout.String(); !strings.Contains(out, ":3000") || strings.Contains(out, "Details:") {
+		t.Errorf("stdout = %q, want the detail view", out)
+	}
+}
+
+func TestRun_MixedArgsUseDetail(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42), listener(4005, 43)}})
+
+	Run(context.Background(), d, []string{"3000", "4000-4010"}, Flags{})
+
+	if out := stdout.String(); !strings.Contains(out, ":3000") || strings.Contains(out, "Details:") {
+		t.Errorf("stdout = %q, want the detail view", out)
+	}
+}
+
+func TestRun_KillWithoutPortsUsesDetail(t *testing.T) {
+	d, stdout, stderr := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	Run(context.Background(), d, nil, Flags{Kill: true, DryRun: true})
+
+	if out := stdout.String(); !strings.Contains(out, ":3000") || strings.Contains(out, "Details:") {
+		t.Errorf("stdout = %q, want the detail view with --kill", out)
+	}
+	if n := strings.Count(stderr.String(), "kill 42"); n > 1 {
+		t.Errorf("stderr = %q, want the stop announced once", stderr.String())
+	}
+}
+
+type longCommandProcs struct{}
+
+func (longCommandProcs) Read(_ context.Context, pid int) (proc.Process, error) {
+	return proc.Process{PID: pid, Name: "node", Cmdline: []string{"node", strings.Repeat("x", 300)}}, nil
+}
+
+func TestRun_WidthShortensCommandUnlessWide(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	d.Procs = longCommandProcs{}
+	d.Width = 80
+
+	Run(context.Background(), d, []string{"3000"}, Flags{})
+	short := stdout.String()
+	stdout.Reset()
+	Run(context.Background(), d, []string{"3000"}, Flags{Wide: true})
+
+	if strings.Contains(short, strings.Repeat("x", 300)) || !strings.Contains(short, "…") {
+		t.Errorf("stdout = %q, want the command shortened", short)
+	}
+	if !strings.Contains(stdout.String(), strings.Repeat("x", 300)) {
+		t.Errorf("stdout = %q, want the full command with --wide", stdout.String())
+	}
+}
+
+func TestRun_TermDumbDisablesColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "dumb")
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	d.IsTTY = true
+
+	Run(context.Background(), d, []string{"3000"}, Flags{})
+
+	if strings.Contains(stdout.String(), "\x1b[") {
+		t.Errorf("stdout = %q, want no colour for TERM=dumb", stdout.String())
+	}
+}
+
+func TestRootCmd_WideFlagIsParsed(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	d.Procs = longCommandProcs{}
+	d.Width = 80
+	cmd, _ := newRootCmd(d)
+	cmd.SetArgs([]string{"--wide", "3000"})
+
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(stdout.String(), strings.Repeat("x", 300)) {
+		t.Errorf("stdout = %q, want the full command with --wide", stdout.String())
+	}
 }

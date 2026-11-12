@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/JtheGunner/portwhy/internal/kill"
@@ -30,6 +29,7 @@ type Flags struct {
 	Yes     bool
 	Force   bool
 	DryRun  bool
+	Wide    bool
 }
 
 // Run explains the given port arguments and returns the process exit code.
@@ -49,7 +49,7 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	}
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, flags); err != nil {
+	if err := write(d, reports, args, flags); err != nil {
 		return fail(d, err)
 	}
 	if flags.Kill && stopAll(ctx, d, reports, flags) {
@@ -124,7 +124,7 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, flags Flags) error {
+func write(d Deps, reports []report.PortReport, args []string, flags Flags) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
@@ -132,8 +132,27 @@ func write(d Deps, reports []report.PortReport, flags Flags) error {
 		_, err := fmt.Fprintln(d.Stdout, "No busy ports.")
 		return err
 	}
-	colors := render.Colors{Enabled: d.IsTTY && !flags.NoColor && os.Getenv("NO_COLOR") == ""}
-	return render.Text(d.Stdout, reports, render.Options{Colors: colors})
+	return render.Text(d.Stdout, reports, render.Options{
+		Colors:   render.NewColors(d.IsTTY, flags.NoColor),
+		Width:    d.Width,
+		Wide:     flags.Wide,
+		Overview: overviewMode(args, flags.Kill),
+	})
+}
+
+// overviewMode reports whether the text output is the grouped overview: for
+// no arguments or only ranges. A named port, and every --kill run, gets the
+// detailed blocks so the user sees exactly what would be stopped.
+func overviewMode(args []string, kill bool) bool {
+	if kill {
+		return false
+	}
+	for _, arg := range args {
+		if !strings.Contains(arg, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 // visibleReports hides free ports unless they were requested as a single port.
