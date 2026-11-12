@@ -1,6 +1,7 @@
 # build output
 /portwhy
 /dist/
+/completions/
 
 # local tooling
 .idea/

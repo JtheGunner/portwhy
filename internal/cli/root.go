@@ -27,9 +27,10 @@ func newRootCmd(d Deps) (*cobra.Command, *int) {
 		Long: "Explain why a port is taken and offer to free it.\n\n" +
 			"Ports are single numbers (3000) or ranges (3000-3010). Without arguments,\n" +
 			"every listening port is listed. Exit codes: 0 busy, 1 all free, 2 error, 3 kill failed.",
-		Version:       Version,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Version:           Version,
+		ValidArgsFunction: completeNoFiles,
+		SilenceUsage:      true,
+		SilenceErrors:     true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			*exit = Run(cmd.Context(), d, args, flags)
 			return nil
@@ -44,6 +45,10 @@ func newRootCmd(d Deps) (*cobra.Command, *int) {
 	f.BoolVar(&flags.Force, "force", false, "send SIGKILL immediately (requires --kill)")
 	f.StringSliceVar(&flags.Source, "source", nil, "only show ports held by this source: docker, systemd, launchd or process (repeatable, comma-separated)")
 	f.BoolVar(&flags.DryRun, "dry-run", false, "show what --kill would do without doing it")
+	// The flag is registered above, so this can only fail on a programming error.
+	if err := cmd.RegisterFlagCompletionFunc("source", completeSources); err != nil {
+		panic(err)
+	}
 	return cmd, exit
 }
 

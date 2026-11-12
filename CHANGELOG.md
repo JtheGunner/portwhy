@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Tab completion for the values of `--source` (`docker`, `systemd`, `launchd`, `process`), including comma-separated lists.
+- The Homebrew cask installs the bash, zsh and fish completions automatically.
+
+### Changed
+- Port arguments no longer trigger file name suggestions in the shell.
+
 ## [0.1.0] - 2026-11-12
 
 First release.
@@ -21,4 +30,5 @@ First release.
 - Shell completion for bash, zsh and fish via `portwhy completion <shell>`.
 - Pre-built binaries for macOS and Linux on amd64 and arm64, and a Homebrew tap (`JtheGunner/tap`).
 
+[Unreleased]: https://github.com/JtheGunner/portwhy/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/JtheGunner/portwhy/releases/tag/v0.1.0

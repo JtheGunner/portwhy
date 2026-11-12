@@ -3,6 +3,11 @@ project_name: portwhy
 before:
   hooks:
     - go mod tidy
+    - rm -rf completions
+    - mkdir completions
+    - sh -c 'go run ./cmd/portwhy completion bash > completions/portwhy.bash'
+    - sh -c 'go run ./cmd/portwhy completion zsh > completions/_portwhy'
+    - sh -c 'go run ./cmd/portwhy completion fish > completions/portwhy.fish'
 builds:
   - id: portwhy
     main: ./cmd/portwhy
@@ -19,6 +24,7 @@ archives:
     files:
       - README.md
       - LICENSE
+      - completions/*
 checksum:
   name_template: checksums.txt
 changelog:
@@ -35,6 +41,10 @@ homebrew_casks:
     description: Explains why a local port is taken and stops the cause after confirmation
     license: MIT
     binaries: [portwhy]
+    completions:
+      bash: completions/portwhy.bash
+      zsh: completions/_portwhy
+      fish: completions/portwhy.fish
     hooks:
       post:
         install_steps: |

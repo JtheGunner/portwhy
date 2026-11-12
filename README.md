@@ -119,13 +119,20 @@ When several apply, the precedence is `2` > `3` > `0` > `1`.
 
 ## ⌨️ Shell completion
 
-Generate a completion script for your shell:
+Tab completes flags and the values of `--source` (`portwhy --source d<Tab>` → `docker`).
 
-```bash
-portwhy completion bash   # or: zsh, fish
-```
+With Homebrew the completions for bash, zsh and fish are installed automatically. Restart your shell to pick them up. For a manual install, load the script once:
 
-Run `portwhy completion <shell> --help` for the install steps of each shell.
+| | Shell | Enable for the current session | Enable permanently |
+| :-: | --- | --- | --- |
+| 🐚 | bash | `source <(portwhy completion bash)` | `portwhy completion bash > ~/.local/share/bash-completion/completions/portwhy` |
+| 🌀 | zsh | `source <(portwhy completion zsh)` | `portwhy completion zsh > "${fpath[1]}/_portwhy"` |
+| 🐟 | fish | `portwhy completion fish \| source` | `portwhy completion fish > ~/.config/fish/completions/portwhy.fish` |
+
+> [!NOTE]
+> bash needs the `bash-completion` package, and zsh needs `compinit` enabled in `~/.zshrc`.
+
+Run `portwhy completion <shell> --help` for more details on each shell.
 
 ---
 
