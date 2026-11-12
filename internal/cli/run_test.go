@@ -65,7 +65,7 @@ func TestRun_FreePortExit1(t *testing.T) {
 	if got != 1 {
 		t.Errorf("exit = %d, want 1", got)
 	}
-	if !strings.Contains(stdout.String(), ":3000  free") {
+	if !strings.Contains(stdout.String(), ":3000 ") || !strings.Contains(stdout.String(), "free") {
 		t.Errorf("stdout = %q, want explicit port shown as free", stdout.String())
 	}
 }
@@ -78,7 +78,7 @@ func TestRun_MixedBusyAndFreeExit0(t *testing.T) {
 	if got != 0 {
 		t.Errorf("exit = %d, want 0", got)
 	}
-	if !strings.Contains(stdout.String(), ":3001  free") {
+	if !strings.Contains(stdout.String(), ":3001 ") || !strings.Contains(stdout.String(), "free") {
 		t.Errorf("stdout = %q, want free port 3001 listed", stdout.String())
 	}
 }
@@ -161,7 +161,7 @@ func TestRun_ExplicitPortNextToRangeStaysVisible(t *testing.T) {
 	Run(context.Background(), d, []string{"22", "3000-3002"}, Flags{})
 
 	out := stdout.String()
-	if !strings.Contains(out, ":22  free") || strings.Contains(out, ":3000") {
+	if !strings.Contains(out, ":22 ") || !strings.Contains(out, "free") || strings.Contains(out, ":3000") {
 		t.Errorf("stdout = %q, want only explicit port 22 shown", out)
 	}
 }

@@ -16,35 +16,39 @@ import (
 )
 
 const (
-	indent = "       " // 7 spaces: aligns details under the text after ":<port>  ".
+	// detailIndent is as wide as the gutter ("  ⚠  "), so label rows line up
+	// with the text next to the status symbols.
+	detailIndent = "     "
+	// maxCommandLines bounds how many lines a long command may take on a
+	// terminal before it ends in an ellipsis.
+	maxCommandLines = 3
+	// labelGapWidth separates a label from its value.
+	labelGapWidth = 2
 
-	// maxFactLength is the longest detail value that is packed into the
-	// shared "Facts" row; longer values get a row of their own.
-	maxFactLength = 24
-
-	labelGap     = "  "
-	labelFacts   = "Facts"
 	labelProcess = "Process"
 	labelStop    = "Stop"
-	labelNote    = "Note"
+	labelCommand = "Command"
+	labelCwd     = "Cwd"
 )
 
-// ownRowKeys are detail keys that always get their own row, however short.
-var ownRowKeys = map[string]bool{"Command": true, "Started by": true}
+// labelOrder ranks the labels that have a fixed place in a block. Everything
+// else keeps the order the detector gave it and sits between "Started by" and
+// the command.
+var labelOrder = map[string]int{labelProcess: 0, "User": 1, "Uptime": 2, "Started by": 3, labelCommand: 5, labelCwd: 6}
 
-// detailRow is one aligned "label  value" line below a block header.
-type detailRow struct {
+// displayLabels renames detector keys for the screen.
+var displayLabels = map[string]string{labelCwd: "Directory"}
+
+// fact is one "Label  value" line of a block before it is wrapped.
+type fact struct {
 	label string
-	// paintedLabel replaces the dimmed label when set (advice markers).
-	paintedLabel string
-	value        string
-	// shorten marks values that are cut at the terminal width.
-	shorten bool
-	// wrap marks values that continue on further lines at the terminal width.
-	wrap bool
-	// tail follows value, on the same line when it fits and on wrapped
-	// continuation lines otherwise. value itself is never broken.
-	tail string
+	value string
+}
+
+// note is a hint or an advice line with its status symbol.
+type note struct {
+	kind statusKind
+	text string
 }
 
 // blockKey identifies the findings that merge into one block: the same
@@ -57,16 +61,30 @@ type blockKey struct {
 	title  string
 }
 
+// textLimit is the width long values are shortened or wrapped to; 0 means
+// unlimited, which is the case without a terminal and with --wide.
+func textLimit(opts Options) int {
+	if opts.Width <= 0 || opts.Wide {
+		return 0
+	}
+	return layoutWidth(opts.Width, false)
+}
+
 // writeDetail writes one block per service or process holding the port, or a
-// single line when the port is free.
+// short block when the port is free.
 func writeDetail(b *strings.Builder, r report.PortReport, opts Options) {
+	g, c := opts.glyphs(), opts.Colors
+	width := layoutWidth(opts.Width, opts.Wide)
 	if len(r.Findings) == 0 {
+		fmt.Fprintln(b, rule(fmt.Sprintf(":%d", r.Port), width, g, c))
+		fmt.Fprintln(b)
+		text := "free"
 		if r.TimeWaitOnly {
-			fmt.Fprintf(b, ":%d  free (only lingering time_wait connections)\n", r.Port)
-			writeAdvice(b, r.Advice, opts)
-			return
+			text = "free (only lingering time_wait connections)"
 		}
-		fmt.Fprintf(b, ":%d  free\n", r.Port)
+		fmt.Fprintln(b, gutter(statusOK, c.ok(text), g, c))
+		writeNotes(b, adviceNotes(r.Advice), textLimit(opts), g, c)
+		fmt.Fprintln(b)
 		return
 	}
 
@@ -85,61 +103,115 @@ func writeDetail(b *strings.Builder, r report.PortReport, opts Options) {
 }
 
 func writeBlock(b *strings.Builder, findings []report.Finding, opts Options) {
-	c := opts.Colors
+	g, c := opts.glyphs(), opts.Colors
+	limit := textLimit(opts)
 	findings = slices.Clone(findings)
 	slices.SortStableFunc(findings, func(x, y report.Finding) int { return cmp.Compare(pidOf(x), pidOf(y)) })
 	primary := findings[0]
 
-	port := fmt.Sprintf(":%d", primary.Socket.Port)
-	where := fmt.Sprintf("%s %s", textutil.Clean(strings.ToUpper(string(primary.Socket.Protocol))), primary.Socket.Addr)
-	title := headline(primary)
-	if opts.Width > 0 && !opts.Wide {
-		prefix := utf8.RuneCountInString(port) + len(labelGap) + utf8.RuneCountInString(where) + len(labelGap)
-		title = fit(title, max(opts.Width-prefix, minProcessWidth))
-	}
-	fmt.Fprintf(b, "%s%s%s%s%s\n", c.bold(port), labelGap, where, labelGap, c.bold(title))
+	title := fmt.Sprintf(":%d %s %s", primary.Socket.Port, g.Dot, headline(primary))
+	fmt.Fprintln(b, rule(title, layoutWidth(opts.Width, opts.Wide), g, c))
+	fmt.Fprintln(b)
 
-	rows := blockRows(findings, c)
-	labelWidth := 0
-	for _, r := range rows {
-		labelWidth = max(labelWidth, utf8.RuneCountInString(r.label))
+	scope := fmt.Sprintf("%s %s", textutil.Clean(string(primary.Socket.Protocol)), primary.Socket.Addr)
+	groups := [][]string{{gutter(statusInfo, scope, g, c)}}
+
+	facts := blockFacts(findings)
+	stops := stopCommands(findings)
+	labelWidth := utf8.RuneCountInString(labelStop)
+	for _, f := range facts {
+		labelWidth = max(labelWidth, utf8.RuneCountInString(f.label))
 	}
 	valueWidth := 0
-	if opts.Width > 0 && !opts.Wide {
-		valueWidth = max(opts.Width-len(indent)-labelWidth-len(labelGap), minProcessWidth)
+	if limit > 0 {
+		valueWidth = max(limit-len(detailIndent)-labelWidth-labelGapWidth, minProcessWidth)
 	}
-	for _, r := range rows {
-		label := r.paintedLabel
-		if label == "" && r.label != "" {
-			label = c.dim(r.label)
+
+	var factRows []labelRow
+	for _, f := range facts {
+		for i, line := range factLines(f, valueWidth, g) {
+			label := f.label
+			if i > 0 {
+				label = ""
+			}
+			factRows = append(factRows, labelRow{Label: label, Value: line})
 		}
-		label += strings.Repeat(" ", labelWidth-utf8.RuneCountInString(r.label))
-		lines := rowLines(r, valueWidth)
-		fmt.Fprintf(b, "%s%s%s%s\n", indent, label, labelGap, lines[0])
-		for _, line := range lines[1:] {
-			fmt.Fprintf(b, "%s%s%s%s\n", indent, strings.Repeat(" ", labelWidth), labelGap, line)
+	}
+	// Facts and stops share one label column so their values line up.
+	var stopRows []labelRow
+	for i, s := range stops {
+		label := ""
+		if i == 0 {
+			label = labelStop
 		}
+		stopRows = append(stopRows, labelRow{Label: label, Value: c.bold(s)})
+	}
+	lines := labelRows(append(slices.Clone(factRows), stopRows...), len(detailIndent), c)
+	if len(factRows) > 0 {
+		groups = append(groups, lines[:len(factRows)])
+	}
+	if len(stopRows) > 0 {
+		stopLines := lines[len(factRows):]
+		stopLines[0] = gutter(statusGo, strings.TrimPrefix(stopLines[0], detailIndent), g, c)
+		groups = append(groups, stopLines)
+	}
+	if notes := blockNotes(findings); len(notes) > 0 {
+		var sb strings.Builder
+		writeNotes(&sb, notes, limit, g, c)
+		groups = append(groups, strings.Split(strings.TrimSuffix(sb.String(), "\n"), "\n"))
+	}
+
+	for _, group := range groups {
+		for _, line := range group {
+			fmt.Fprintln(b, line)
+		}
+		fmt.Fprintln(b)
 	}
 }
 
-// rowLines is the text of a row split for a value column of width runes
-// (0 means unlimited).
-func rowLines(r detailRow, width int) []string {
-	value := r.value
-	if r.shorten {
-		value = fit(value, width)
+// factLines is the text of a fact split for a value column of width runes
+// (0 means unlimited). A command wraps over a few lines; everything else is
+// shortened to one.
+func factLines(f fact, width int, g Glyphs) []string {
+	if width <= 0 {
+		return []string{f.value}
 	}
-	if r.tail != "" {
-		joined := value + "   " + r.tail
-		if width <= 0 || utf8.RuneCountInString(joined) <= width {
-			return []string{joined}
+	if f.label != displayLabel(labelCommand) {
+		return []string{fitWith(f.value, width, g.Ellipsis)}
+	}
+	lines := wrapWords(f.value, width)
+	if len(lines) > maxCommandLines {
+		lines = append(lines[:maxCommandLines-1], strings.Join(lines[maxCommandLines-1:], " "))
+	}
+	for i, line := range lines {
+		lines[i] = fitWith(line, width, g.Ellipsis)
+	}
+	return lines
+}
+
+func displayLabel(key string) string {
+	if label, ok := displayLabels[key]; ok {
+		return label
+	}
+	return key
+}
+
+// writeNotes writes hints and advice as status lines, wrapped to limit with a
+// hanging indent under the text.
+func writeNotes(b *strings.Builder, notes []note, limit int, g Glyphs, c Colors) {
+	room := 0
+	if limit > 0 {
+		room = max(limit-len(detailIndent), minProcessWidth)
+	}
+	for _, n := range notes {
+		for i, line := range wrapWords(n.text, room) {
+			if i == 0 {
+				fmt.Fprintln(b, gutter(n.kind, line, g, c))
+				continue
+			}
+			fmt.Fprintln(b, detailIndent+line)
 		}
-		return append([]string{value}, wrapWords(r.tail, width)...)
 	}
-	if r.wrap {
-		return wrapWords(value, width)
-	}
-	return []string{value}
 }
 
 // pidOf is the PID that identifies a finding; 0 when the owner is not visible.
@@ -166,89 +238,68 @@ func headline(f report.Finding) string {
 	}
 }
 
-// blockRows builds the body of a block from its findings (lowest PID first).
-func blockRows(findings []report.Finding, c Colors) []detailRow {
+// blockFacts builds the label rows of a block from its findings (lowest PID
+// first): the owner, then the detector details in a fixed order.
+func blockFacts(findings []report.Finding) []fact {
 	primary := findings[0]
-	var rows []detailRow
+	var facts []fact
 
 	if p := primary.Process; p != nil && (primary.Explanation.Source != detect.SourceProcess || len(findings) > 1) {
 		value := fmt.Sprintf("%s (PID %d)", textutil.Clean(p.Name), p.PID)
 		if n := len(findings) - 1; n > 0 {
 			value += fmt.Sprintf(" +%d more", n)
 		}
-		rows = append(rows, detailRow{label: labelProcess, value: value, shorten: true})
+		facts = append(facts, fact{labelProcess, value})
 	}
-
-	rows = append(rows, detailRows(primary.Explanation.Details)...)
-	rows = append(rows, stopRows(findings)...)
-	rows = append(rows, adviceRows(findings, c)...)
-	return rows
-}
-
-// detailRows turns detector details into rows: short values share one "Facts"
-// row at the position of the first of them, the rest get a row each. A
-// "Process" detail is skipped because the block states the owner itself.
-func detailRows(details []detect.Detail) []detailRow {
-	var rows []detailRow
-	facts := -1
-	for _, d := range details {
+	for _, d := range primary.Explanation.Details {
 		key, value := textutil.Clean(d.Key), textutil.Clean(d.Value)
+		// The block states the owner itself.
 		if key == labelProcess {
 			continue
 		}
-		if ownRowKeys[key] || utf8.RuneCountInString(value) > maxFactLength {
-			rows = append(rows, detailRow{label: key, value: value, shorten: true})
-			continue
-		}
-		fact := strings.TrimSpace(key + " " + value)
-		if facts < 0 {
-			facts = len(rows)
-			rows = append(rows, detailRow{label: labelFacts, value: fact, wrap: true})
-			continue
-		}
-		rows[facts].value += " · " + fact
+		facts = append(facts, fact{key, value})
 	}
-	return rows
+	slices.SortStableFunc(facts, func(a, b fact) int { return cmp.Compare(rankOf(a.label), rankOf(b.label)) })
+	for i := range facts {
+		facts[i].label = displayLabel(facts[i].label)
+	}
+	return facts
 }
 
-// stopRows lists each distinct way to stop the block once, followed by the
-// hints; without a way to stop, the hints stand alone as a note.
-func stopRows(findings []report.Finding) []detailRow {
-	var stops, hints []string
+// rankOf orders a label: known labels have a fixed place, others go between
+// "Started by" and the command in detector order.
+func rankOf(label string) int {
+	if r, ok := labelOrder[label]; ok {
+		return r
+	}
+	return 4
+}
+
+// stopCommands lists each distinct way to stop the block once.
+func stopCommands(findings []report.Finding) []string {
+	var stops []string
 	for _, f := range findings {
 		if t := f.Explanation.Terminator; t != nil {
 			if s := textutil.Clean(t.Describe()); !slices.Contains(stops, s) {
 				stops = append(stops, s)
 			}
 		}
+	}
+	return stops
+}
+
+// blockNotes lists the distinct hints of the findings as warnings, followed by
+// the distinct advice under its own level.
+func blockNotes(findings []report.Finding) []note {
+	var notes []note
+	for _, f := range findings {
 		for _, h := range f.Explanation.Hints {
-			if h = textutil.Clean(h); !slices.Contains(hints, h) {
-				hints = append(hints, h)
+			n := note{statusWarn, textutil.Clean(h)}
+			if !slices.Contains(notes, n) {
+				notes = append(notes, n)
 			}
 		}
 	}
-	hintText := ""
-	if len(hints) > 0 {
-		hintText = "(" + strings.Join(hints, "; ") + ")"
-	}
-
-	var rows []detailRow
-	for i, s := range stops {
-		row := detailRow{value: s}
-		if i == 0 {
-			row.label = labelStop
-			row.tail = hintText
-		}
-		rows = append(rows, row)
-	}
-	if len(stops) == 0 && hintText != "" {
-		rows = append(rows, detailRow{label: labelNote, value: hintText, wrap: true})
-	}
-	return rows
-}
-
-// adviceRows lists the distinct advice of the findings under a level marker.
-func adviceRows(findings []report.Finding, c Colors) []detailRow {
 	var advice []advise.Advice
 	for _, f := range findings {
 		for _, a := range f.Advice {
@@ -257,36 +308,23 @@ func adviceRows(findings []report.Finding, c Colors) []detailRow {
 			}
 		}
 	}
-	rows := make([]detailRow, 0, len(advice))
-	for _, a := range advice {
-		marker, code := "i", ansiCyan
-		if a.Level == advise.Warn {
-			marker, code = "!", ansiYellow
+	for _, n := range adviceNotes(advice) {
+		if !slices.Contains(notes, n) {
+			notes = append(notes, n)
 		}
-		rows = append(rows, detailRow{label: marker, paintedLabel: c.paint(code, marker), value: textutil.Clean(a.Text), wrap: true})
 	}
-	return rows
+	return notes
 }
 
-// writeAdvice writes the advice of a port without a block of its own, wrapped
-// to the terminal width with a hanging indent under the marker.
-func writeAdvice(b *strings.Builder, advice []advise.Advice, opts Options) {
-	c := opts.Colors
-	width := 0
-	if opts.Width > 0 && !opts.Wide {
-		width = max(opts.Width-len(indent)-2, minProcessWidth)
-	}
+// adviceNotes maps advice to status lines.
+func adviceNotes(advice []advise.Advice) []note {
+	notes := make([]note, 0, len(advice))
 	for _, a := range advice {
-		marker := c.paint(ansiCyan, "i")
+		kind := statusInfo
 		if a.Level == advise.Warn {
-			marker = c.paint(ansiYellow, "!")
+			kind = statusWarn
 		}
-		for i, line := range wrapWords(textutil.Clean(a.Text), width) {
-			lead := marker
-			if i > 0 {
-				lead = " "
-			}
-			fmt.Fprintf(b, "%s%s %s\n", indent, lead, line)
-		}
+		notes = append(notes, note{kind, textutil.Clean(a.Text)})
 	}
+	return notes
 }

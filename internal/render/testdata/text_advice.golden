@@ -1,6 +1,14 @@
-:5432  TCP 0.0.0.0  Docker container "db" (postgres:16)
-       Process  postgres (PID 812)
-       Facts    Mapping 5432→5432 · up 3 days
-       Stop     docker stop db   (restart policy "always": it comes back after a restart)
-       !        Listening on all interfaces
-       i        Try 127.0.0.1 for local-only access
+──────────────── :5432 · Docker container "db" (postgres:16) ─────────────────
+
+  ℹ  tcp 0.0.0.0
+
+     Process  postgres (PID 812)
+     Mapping  5432→5432
+     up       3 days
+
+  →  Stop     docker stop db
+
+  ⚠  restart policy "always": it comes back after a restart
+  ⚠  Listening on all interfaces
+  ℹ  Try 127.0.0.1 for local-only access
+

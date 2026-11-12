@@ -142,7 +142,7 @@ func TestRun_UnknownSourceWithNothingListeningSaysNone(t *testing.T) {
 }
 
 func TestRun_ExplicitPortNotMatchingFilterIsNotReportedFree(t *testing.T) {
-	// Port 3000 is busy, just not by docker. Showing ":3000  free" would be a lie.
+	// Port 3000 is busy, just not by docker. Showing ":3000 free" would be a lie.
 	d, stdout, _ := mixedDeps()
 
 	got := Run(context.Background(), d, []string{"3000"}, Flags{Source: []string{"docker"}})
