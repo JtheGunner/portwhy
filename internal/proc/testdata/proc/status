@@ -1,0 +1,9 @@
+Name:	node
+Umask:	0022
+State:	S (sleeping)
+Tgid:	4242
+Pid:	4242
+PPid:	4100
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+Threads:	11
