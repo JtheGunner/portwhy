@@ -226,7 +226,7 @@ func TestText_ControlCharactersInExternalStringsAreNeutralised(t *testing.T) {
 		out := renderText(t, c, r)
 		stripped := out
 		if c.Enabled {
-			for _, code := range []string{ansiGreen, ansiYellow, ansiCyan, ansiReset} {
+			for _, code := range []string{ansiGreen, ansiYellow, ansiCyan, ansiBold, ansiDim, ansiReset} {
 				stripped = bytes.ReplaceAll(stripped, []byte(code), nil)
 			}
 		}

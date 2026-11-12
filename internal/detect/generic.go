@@ -61,14 +61,17 @@ func (g generic) Detect(_ context.Context, _ socket.Socket, p *proc.Process) (*E
 }
 
 // ancestorChain renders the process and its parents, e.g. "node ← npm ← zsh".
-// It returns "" when there are no ancestors.
+// A name that repeats directly after itself (an app and its helper) is shown
+// once. It returns "" when there are no ancestors.
 func ancestorChain(p proc.Process) string {
 	if len(p.Ancestors) == 0 {
 		return ""
 	}
 	names := []string{p.Name}
 	for _, a := range p.Ancestors {
-		names = append(names, a.Name)
+		if a.Name != names[len(names)-1] {
+			names = append(names, a.Name)
+		}
 	}
 	return strings.Join(names, " ← ")
 }
