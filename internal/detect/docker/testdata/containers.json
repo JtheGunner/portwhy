@@ -1,0 +1,23 @@
+[
+  {
+    "Id": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "Names": ["/pw-test"],
+    "Image": "nginx:1.27",
+    "State": "running",
+    "Ports": [
+      {"IP": "0.0.0.0", "PrivatePort": 80, "PublicPort": 8125, "Type": "tcp"},
+      {"IP": "::", "PrivatePort": 80, "PublicPort": 8125, "Type": "tcp"},
+      {"IP": "0.0.0.0", "PrivatePort": 53, "PublicPort": 5353, "Type": "udp"}
+    ]
+  },
+  {
+    "Id": "ffeeddccbbaa00998877665544332211ffeeddccbbaa00998877665544332211",
+    "Names": ["/db"],
+    "Image": "postgres:16",
+    "State": "running",
+    "Ports": [
+      {"PrivatePort": 5432, "Type": "tcp"},
+      {"IP": "0.0.0.0", "PrivatePort": 5432, "PublicPort": 5432, "Type": "tcp"}
+    ]
+  }
+]

@@ -16,7 +16,7 @@ func DefaultDeps() Deps {
 	return Deps{
 		Sockets:    socket.NewCollector(""),
 		Procs:      procs,
-		Detector:   detect.Chain(detect.NewGeneric(procs, os.Getpid())),
+		Detector:   newDetector(detect.NewGeneric(procs, os.Getpid())),
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
 		IsTTY:      isTerminal(os.Stdout),
