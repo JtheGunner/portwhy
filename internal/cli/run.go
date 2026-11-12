@@ -7,9 +7,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/JtheGunner/portwhy/internal/kill"
 	"github.com/JtheGunner/portwhy/internal/portspec"
 	"github.com/JtheGunner/portwhy/internal/render"
 	"github.com/JtheGunner/portwhy/internal/report"
+	"github.com/JtheGunner/portwhy/internal/socket"
 )
 
 // Exit codes. When several apply, the highest precedence wins: 2 > 3 > 0 > 1.
@@ -20,8 +22,7 @@ const (
 	exitKillFailure = 3
 )
 
-// Flags are the command line options. The kill flags are parsed here and
-// acted on by the kill core.
+// Flags are the command line options.
 type Flags struct {
 	JSON    bool
 	NoColor bool
@@ -51,10 +52,76 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	if err := write(d, reports, flags); err != nil {
 		return fail(d, err)
 	}
+	if flags.Kill && stopAll(ctx, d, reports, flags) {
+		return exitKillFailure
+	}
 	if anyBusy(reports) {
 		return exitBusy
 	}
 	return exitAllFree
+}
+
+// stopAll stops the cause of every busy port and reports whether any attempt
+// failed. Prompts and messages go to stderr so JSON on stdout stays intact.
+// A declined prompt is the user's choice and not a failure.
+func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Flags) (failed bool) {
+	opts := kill.Options{
+		Yes:         flags.Yes,
+		Force:       flags.Force,
+		DryRun:      flags.DryRun,
+		Interactive: d.IsTTY && d.StdinIsTTY,
+		In:          d.Stdin,
+		Out:         d.Stderr,
+	}
+	check := portFree(d.Sockets)
+	done := make(map[string]bool)
+
+	for _, r := range reports {
+		for _, f := range r.Findings {
+			if f.Explanation.Terminator == nil {
+				_, _ = fmt.Fprintf(d.Stderr, "portwhy: cannot stop port %d: the owning process is not visible; try again with sudo\n", r.Port)
+				failed = true
+				continue
+			}
+			t := f.Explanation.Terminator
+			key := fmt.Sprintf("%d/%s", r.Port, t.Describe())
+			if done[key] {
+				continue
+			}
+			done[key] = true
+
+			err := kill.Run(ctx, t, r.Port, opts, check)
+			switch {
+			case err == nil:
+				if !flags.DryRun {
+					_, _ = fmt.Fprintf(d.Stderr, "Port %d is free.\n", r.Port)
+				}
+			case errors.Is(err, kill.ErrDeclined):
+				_, _ = fmt.Fprintf(d.Stderr, "Port %d left untouched.\n", r.Port)
+			default:
+				_, _ = fmt.Fprintf(d.Stderr, "portwhy: port %d: %v\n", r.Port, err)
+				failed = true
+			}
+		}
+	}
+	return failed
+}
+
+// portFree returns a kill.PortChecker that treats any listening socket on the
+// port, including one whose owner is not visible, as busy.
+func portFree(c socket.Collector) kill.PortChecker {
+	return func(ctx context.Context, port uint16) (bool, error) {
+		sockets, err := c.Sockets(ctx)
+		if err != nil {
+			return false, err
+		}
+		for _, s := range sockets {
+			if s.Port == port && s.State == socket.Listen {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
 }
 
 func write(d Deps, reports []report.PortReport, flags Flags) error {

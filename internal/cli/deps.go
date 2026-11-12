@@ -19,8 +19,12 @@ type Deps struct {
 	Detector detect.Detector
 	Stdout   io.Writer
 	Stderr   io.Writer
-	IsTTY    bool
-	Pid      int
+	Stdin    io.Reader
+	// IsTTY reports whether Stdout is a terminal; StdinIsTTY the same for
+	// Stdin. Prompts need both.
+	IsTTY      bool
+	StdinIsTTY bool
+	Pid        int
 }
 
 // isTerminal reports whether f is attached to a terminal.

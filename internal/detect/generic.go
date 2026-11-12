@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JtheGunner/portwhy/internal/kill"
 	"github.com/JtheGunner/portwhy/internal/proc"
 	"github.com/JtheGunner/portwhy/internal/socket"
 )
@@ -13,14 +14,25 @@ import (
 const ownerNotVisibleTitle = "owner not visible"
 
 // generic is the fallback detector: it always matches and describes the bare
-// process. Its Terminator stays nil until the kill core is wired in.
+// process. When it has a process reader it also returns a signal-based
+// Terminator.
 type generic struct {
-	now func() time.Time
+	now    func() time.Time
+	reader proc.Reader
+	self   int
 }
 
-// Generic returns the fallback detector that always matches.
+// Generic returns the fallback detector that always matches. It explains but
+// offers no Terminator; use NewGeneric for a detector that can stop processes.
 func Generic() Detector {
 	return generic{now: time.Now}
+}
+
+// NewGeneric returns the fallback detector with a ProcessTerminator. The
+// terminator re-reads the process through r before signalling and never
+// signals the process with PID self.
+func NewGeneric(r proc.Reader, self int) Detector {
+	return generic{now: time.Now, reader: r, self: self}
 }
 
 func (g generic) Detect(_ context.Context, _ socket.Socket, p *proc.Process) (*Explanation, bool) {
@@ -42,6 +54,9 @@ func (g generic) Detect(_ context.Context, _ socket.Socket, p *proc.Process) (*E
 	}
 	add("Cwd", p.Cwd)
 	add("Started by", ancestorChain(*p))
+	if g.reader != nil {
+		e.Terminator = kill.NewProcessTerminator(*p, g.reader, g.self, kill.OSSignaler{})
+	}
 	return e, true
 }
 
