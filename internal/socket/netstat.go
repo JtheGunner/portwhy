@@ -40,6 +40,11 @@ func parseNetstat(out []byte) ([]Socket, error) {
 			continue
 		}
 
+		// An unbound UDP socket has no local port ("*.*") and holds nothing.
+		if fields[3] == "*.*" {
+			continue
+		}
+
 		addr, port, err := parseNetstatName(fields[3], wildcard)
 		if err != nil {
 			return nil, fmt.Errorf("netstat line %d: %w", lineNumber, err)
