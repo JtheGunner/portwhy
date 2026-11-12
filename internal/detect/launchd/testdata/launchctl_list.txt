@@ -1,0 +1,12 @@
+PID	Status	Label
+-	0	com.apple.SafariHistoryServiceAgent
+1187	0	com.apple.progressd
+-	0	com.apple.enhancedloggingd
+1113	0	com.apple.rapportd
+89875	-15	com.apple.Finder
+3884	0	homebrew.mxcl.php@8.4
+3863	0	ai.openclaw.gateway
+13250	0	application.com.example.player.115990561.115991375
+-	78	com.example.broken-agent
+4100	0	com.example.toolbox
+0x1f2e3d	0	UIKitApplication:com.example.app[0xabcd][rb-legacy]

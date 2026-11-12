@@ -138,7 +138,7 @@ func (t *terminator) Terminate(ctx context.Context) error {
 	if err == nil {
 		return nil
 	}
-	cleaned := cleanedError{err: err}
+	cleaned := textutil.CleanError(err)
 	if t.needsSudo() && isPermissionError(err) {
 		return fmt.Errorf("not permitted to stop %s: rerun portwhy with sudo (%s): %w",
 			textutil.Clean(t.unit.Name), t.Describe(), cleaned)
@@ -156,13 +156,3 @@ func isPermissionError(err error) bool {
 	}
 	return false
 }
-
-// cleanedError wraps an error whose text comes from an external command, so
-// that its message is safe to print while errors.Is and errors.As still see
-// the original.
-type cleanedError struct{ err error }
-
-func (e cleanedError) Error() string { return textutil.Clean(e.err.Error()) }
-func (e cleanedError) Unwrap() error { return e.err }
-
-var _ error = cleanedError{}
