@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/JtheGunner/portwhy/internal/advise"
 	"github.com/JtheGunner/portwhy/internal/report"
@@ -38,29 +39,29 @@ func writeReport(b *strings.Builder, r report.PortReport, c Colors) {
 }
 
 func writeFinding(b *strings.Builder, f report.Finding, c Colors) {
-	fmt.Fprintf(b, ":%d  %s %s  → %s", f.Socket.Port, strings.ToUpper(string(f.Socket.Protocol)), f.Socket.Addr, owner(f, c))
+	fmt.Fprintf(b, ":%d  %s %s  → %s", f.Socket.Port, clean(strings.ToUpper(string(f.Socket.Protocol))), f.Socket.Addr, owner(f, c))
 	if f.Explanation.Title != "" {
-		fmt.Fprintf(b, " · %s", f.Explanation.Title)
+		fmt.Fprintf(b, " · %s", clean(f.Explanation.Title))
 	}
 	b.WriteByte('\n')
 
 	if len(f.Explanation.Details) > 0 {
 		parts := make([]string, 0, len(f.Explanation.Details))
 		for _, d := range f.Explanation.Details {
-			parts = append(parts, strings.TrimSpace(d.Key+" "+d.Value))
+			parts = append(parts, strings.TrimSpace(clean(d.Key)+" "+clean(d.Value)))
 		}
 		fmt.Fprintf(b, "%s%s\n", indent, strings.Join(parts, " · "))
 	}
 
 	hints := ""
 	if len(f.Explanation.Hints) > 0 {
-		hints = "(" + strings.Join(f.Explanation.Hints, "; ") + ")"
+		hints = "(" + clean(strings.Join(f.Explanation.Hints, "; ")) + ")"
 	}
 	switch {
 	case f.Explanation.Terminator != nil && hints != "":
-		fmt.Fprintf(b, "%sStop: %s   %s\n", indent, f.Explanation.Terminator.Describe(), hints)
+		fmt.Fprintf(b, "%sStop: %s   %s\n", indent, clean(f.Explanation.Terminator.Describe()), hints)
 	case f.Explanation.Terminator != nil:
-		fmt.Fprintf(b, "%sStop: %s\n", indent, f.Explanation.Terminator.Describe())
+		fmt.Fprintf(b, "%sStop: %s\n", indent, clean(f.Explanation.Terminator.Describe()))
 	case hints != "":
 		fmt.Fprintf(b, "%s%s\n", indent, hints)
 	}
@@ -70,7 +71,7 @@ func writeFinding(b *strings.Builder, f report.Finding, c Colors) {
 		if a.Level == advise.Warn {
 			marker = c.paint(ansiYellow, "!")
 		}
-		fmt.Fprintf(b, "%s%s %s\n", indent, marker, a.Text)
+		fmt.Fprintf(b, "%s%s %s\n", indent, marker, clean(a.Text))
 	}
 }
 
@@ -78,10 +79,24 @@ func writeFinding(b *strings.Builder, f report.Finding, c Colors) {
 func owner(f report.Finding, c Colors) string {
 	switch {
 	case f.Process != nil:
-		return c.paint(ansiGreen, fmt.Sprintf("%s (PID %d)", f.Process.Name, f.Process.PID))
+		return c.paint(ansiGreen, fmt.Sprintf("%s (PID %d)", clean(f.Process.Name), f.Process.PID))
 	case f.Socket.PID != 0:
 		return c.paint(ansiGreen, fmt.Sprintf("PID %d", f.Socket.PID))
 	default:
 		return c.paint(ansiYellow, "owner not visible")
 	}
+}
+
+// clean makes an externally sourced string safe to print on a terminal. Process
+// names, command lines and container metadata are controlled by whoever started
+// the process, so control characters (ESC, C1 controls such as CSI, BEL, CR,
+// newlines) are replaced with '?' and invalid UTF-8 with U+FFFD before they
+// reach the output. Only the renderer's own colour codes may carry escapes.
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if !unicode.IsPrint(r) {
+			return '?'
+		}
+		return r
+	}, s)
 }

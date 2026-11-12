@@ -210,3 +210,33 @@ func TestJSON_FreePort(t *testing.T) {
 func TestJSON_OwnerNotVisible(t *testing.T) {
 	golden(t, "json_owner_hidden.golden", renderJSON(t, adviceReport(), hiddenReport()))
 }
+
+func TestText_ControlCharactersInExternalStringsAreNeutralised(t *testing.T) {
+	const esc = "\x1b[31m\x07evil\r\x9b"
+	r := dockerReport()
+	f := &r.Findings[0]
+	f.Process.Name = "proc" + esc
+	f.Explanation.Title = "title" + esc
+	f.Explanation.Details = []detect.Detail{{Key: "key" + esc, Value: "value" + esc}}
+	f.Explanation.Hints = []string{"hint" + esc}
+	f.Explanation.Terminator = fakeTerminator("stop" + esc)
+	f.Advice = []advise.Advice{{Level: advise.Warn, Text: "advice" + esc}}
+
+	for _, c := range []Colors{{}, {Enabled: true}} {
+		out := renderText(t, c, r)
+		stripped := out
+		if c.Enabled {
+			for _, code := range []string{ansiGreen, ansiYellow, ansiCyan, ansiReset} {
+				stripped = bytes.ReplaceAll(stripped, []byte(code), nil)
+			}
+		}
+		for _, bad := range []string{"\x1b", "\x07", "\r", "\x9b"} {
+			if bytes.Contains(stripped, []byte(bad)) {
+				t.Errorf("colors=%v: output contains control character %q:\n%q", c.Enabled, bad, out)
+			}
+		}
+		if !bytes.Contains(out, []byte("evil")) {
+			t.Errorf("sanitising must keep the printable text:\n%q", out)
+		}
+	}
+}
