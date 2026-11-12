@@ -109,6 +109,6 @@ func anyBusy(reports []report.PortReport) bool {
 }
 
 func fail(d Deps, err error) int {
-	fmt.Fprintln(d.Stderr, "portwhy:", err)
+	_, _ = fmt.Fprintln(d.Stderr, "portwhy:", err)
 	return exitError
 }
