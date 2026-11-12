@@ -280,29 +280,23 @@ func TestDetector_WorkerOfHomebrewServiceMatchesJob(t *testing.T) {
 	}
 }
 
-func TestDetector_ClosestLabelledAncestorWins(t *testing.T) {
+func TestDetector_OnlyTheDirectParentCountsAsTheJob(t *testing.T) {
 	tests := []struct {
 		name      string
 		ancestors []proc.Ancestor
-		wantTitle string
 	}{
-		{"application between worker and job", []proc.Ancestor{{PID: 13250, Name: "Player"}, {PID: 4100, Name: "toolbox"}}, ""},
-		{"unlabelled ancestor is skipped", []proc.Ancestor{{PID: 777, Name: "sh"}, {PID: 4100, Name: "toolbox"}}, `launchd job "com.example.toolbox"`},
+		{"application parent", []proc.Ancestor{{PID: 13250, Name: "Player"}, {PID: 4100, Name: "toolbox"}}},
+		{"unlabelled parent below a job", []proc.Ancestor{{PID: 777, Name: "sh"}, {PID: 4100, Name: "toolbox"}}},
+		{"job further up the chain", []proc.Ancestor{{PID: 777, Name: "go"}, {PID: 778, Name: "bash"}, {PID: 3884, Name: "runner"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := withAncestors(process(5000, 777, "worker"), tt.ancestors...)
+			p := withAncestors(process(5000, tt.ancestors[0].PID, "worker"), tt.ancestors...)
 
 			got, ok := newTestDetector(listRunner(t), &execx.Fake{}, testUID).Detect(context.Background(), testSocket, p)
 
-			if tt.wantTitle == "" {
-				if ok || got != nil {
-					t.Fatalf("Detect() = %v, %v, want no match", got, ok)
-				}
-				return
-			}
-			if !ok || got.Title != tt.wantTitle {
-				t.Errorf("Detect() = %v, %v, want title %q", got, ok, tt.wantTitle)
+			if ok || got != nil {
+				t.Fatalf("Detect() = %v, %v, want no match: a process far below a job must never be stopped through it", got, ok)
 			}
 		})
 	}
