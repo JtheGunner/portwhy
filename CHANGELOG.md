@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 - `--plain` prints one tab-separated line per socket (port, protocol, address, PID, source, name) for `grep` and `awk`. Combining it with `--json` is an error.
+- A systemd explanation shows whether the port holder is the main process of the unit or a child, and hints that `systemctl stop` ends the whole unit.
 
 ## [0.3.0] - 2026-11-12
 

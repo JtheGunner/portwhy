@@ -3,6 +3,7 @@ package systemd
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,15 @@ import (
 // Detector explains a socket whose owner runs inside a systemd service. It
 // never matches when systemctl cannot be queried (not installed, systemd not
 // running, unit unknown), so the next detector in the chain takes over.
+//
+// Matching is cgroup-based on purpose: every process of the unit matches, not
+// only its MainPID. For services such as nginx the master and the workers both
+// hold the port; a MainPID-only match would send the workers to the generic
+// fallback, where a signal is undone by the master respawning them and the
+// port stays busy. Stopping the unit is what frees the port. Because that ends
+// the whole unit, the explanation names the holder's role (main or child
+// process) and says so in a hint; the prompt shows the exact command and
+// confirmation stays mandatory.
 type Detector struct {
 	query execx.Runner
 	stop  execx.Runner
@@ -58,11 +68,12 @@ func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process)
 		return nil, false
 	}
 
-	out, err := d.query.Run(ctx, "systemctl", systemctlArgs(unit.User, "show", "-p", "Restart", "--value", unit.Name)...)
+	out, err := d.query.Run(ctx, "systemctl", systemctlArgs(unit.User, "show", "-p", "Restart", "-p", "MainPID", unit.Name)...)
 	if err != nil {
 		return nil, false
 	}
-	restart := strings.TrimSpace(string(out))
+	props := parseProperties(string(out))
+	restart := props["Restart"]
 
 	scope := "system"
 	if unit.User {
@@ -77,6 +88,9 @@ func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process)
 		},
 		Terminator: newTerminator(d.stop, unit, d.uid),
 	}
+	if role := holderRole(p.PID, props["MainPID"]); role != "" {
+		e.Details = append(e.Details, detect.Detail{Key: "Role", Value: role})
+	}
 	if !p.Started.IsZero() {
 		e.Details = append(e.Details, detect.Detail{Key: "Uptime", Value: detect.FormatUptime(d.now().Sub(p.Started))})
 	}
@@ -86,7 +100,35 @@ func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process)
 		e.Hints = append(e.Hints, fmt.Sprintf(
 			"Restart=%s: systemd restarts the process after a plain kill; stopping the unit keeps it down", clean))
 	}
+	e.Hints = append(e.Hints, "systemctl stop ends the whole unit, including every process in it")
 	return e, true
+}
+
+// parseProperties reads the Key=Value lines of systemctl show output, so the
+// order of the properties does not matter. Values are trimmed.
+func parseProperties(output string) map[string]string {
+	props := make(map[string]string)
+	for _, line := range strings.Split(output, "\n") {
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		props[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return props
+}
+
+// holderRole describes how the holder relates to the unit's main process. It
+// returns "" when MainPID is missing, zero or not a positive number.
+func holderRole(pid int, mainPID string) string {
+	main, err := strconv.Atoi(mainPID)
+	if err != nil || main <= 0 {
+		return ""
+	}
+	if pid == main {
+		return "main process of the unit"
+	}
+	return fmt.Sprintf("child process of the unit (main PID %d)", main)
 }
 
 // systemctlArgs builds the argument list of a systemctl call, selecting the

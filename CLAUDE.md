@@ -39,4 +39,5 @@ go run ./cmd/portwhy 3000
 ## Decisions on record
 
 - macOS socket data comes from an own `lsof`/`netstat` parser (`internal/socket`); `gopsutil` is not adopted. Spike outcome: it was not added or run (no network access), but from memory its macOS connection listing also shells out to `lsof` (unverified), so it would add a dependency without removing the external tool, and without root `lsof` sees only own processes either way, which the `netstat` merge (PID 0 for invisible owners) covers. Revisit only if the parser proves fragile. Process data (`ps`) follows in the process-reader ticket.
+- The systemd detector matches the whole cgroup of a unit, not only its MainPID: nginx-style workers also hold the port, and a signal to a worker is undone by the master respawning it, so only `systemctl stop` frees the port. The explanation shows the holder's role and a hint that the whole unit stops.
 - Podman and dev-server heuristics are v0.2; `wait`/`free` subcommands only if demand appears.
