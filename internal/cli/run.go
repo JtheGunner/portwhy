@@ -85,7 +85,7 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 		Yes:         flags.Yes,
 		Force:       flags.Force,
 		DryRun:      flags.DryRun,
-		Interactive: d.IsTTY && d.StdinIsTTY,
+		Interactive: d.StdinIsTTY && d.StderrIsTTY,
 		In:          d.Stdin,
 		Out:         d.Stderr,
 	}
@@ -112,7 +112,12 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 				break
 			}
 			if f.Explanation.Terminator == nil {
-				line(render.KillFailed, r.Port, "cannot stop it: the owning process is not visible; try again with sudo")
+				const hint = "cannot stop it: the owning process is not visible; try again with sudo"
+				if flags.DryRun {
+					_, _ = fmt.Fprintln(d.Stderr, render.KillLine(render.KillFailed, r.Port, hint, ropts))
+					continue
+				}
+				line(render.KillFailed, r.Port, hint)
 				failed = true
 				continue
 			}
