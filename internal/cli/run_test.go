@@ -238,6 +238,19 @@ func TestRun_YesWithoutKillExit2(t *testing.T) {
 	}
 }
 
+func TestRun_ForceWithoutKillExit2(t *testing.T) {
+	d, _, stderr := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Force: true})
+
+	if got != 2 {
+		t.Errorf("exit = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "--force requires --kill") {
+		t.Errorf("stderr = %q, want it to contain %q", stderr.String(), "--force requires --kill")
+	}
+}
+
 func TestRun_NoColorWhenNotTTY(t *testing.T) {
 	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
 
@@ -405,8 +418,7 @@ func TestRun_KillWithoutTTYAndWithoutYesExit3(t *testing.T) {
 func TestRun_KillNeedsStdinTTYToo(t *testing.T) {
 	ft := &fakeTerminator{describe: "x"}
 	d, _ := killDeps(ft, &freeingSockets{})
-	d.IsTTY = true
-	d.StdinIsTTY = false
+	d.StdinIsTTY, d.StderrIsTTY = false, true
 	d.Stdin = strings.NewReader("y\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 3 {
@@ -421,7 +433,7 @@ func TestRun_KillPromptAccepted(t *testing.T) {
 	c := &freeingSockets{}
 	ft := &fakeTerminator{describe: "x", onTerm: func() { c.freed = true }}
 	d, _ := killDeps(ft, c)
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("y\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
@@ -435,7 +447,7 @@ func TestRun_KillPromptAccepted(t *testing.T) {
 func TestRun_KillDeclinedIsNotAFailure(t *testing.T) {
 	ft := &fakeTerminator{describe: "x"}
 	d, _ := killDeps(ft, &freeingSockets{})
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("n\n")
 
 	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
@@ -500,6 +512,60 @@ func TestRun_KillTerminatesSharedCauseOnce(t *testing.T) {
 	if ft.calls != 1 {
 		t.Errorf("Terminate calls = %d, want 1", ft.calls)
 	}
+}
+
+func TestRun_KillSkipsLaterFindingsOnceFirstFreedPort(t *testing.T) {
+	c := &freeingSockets{}
+	first := &fakeTerminator{describe: "brew services stop php", onTerm: func() { c.freed = true }}
+	second := &fakeTerminator{describe: "kill -TERM 43"}
+	d, stderr := killDeps(first, c)
+	d.Sockets = twoPIDSockets{c}
+	d.Detector = perPIDDetector{42: first, 43: second}
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if first.calls != 1 || second.calls != 0 {
+		t.Errorf("calls = %d/%d, want 1/0", first.calls, second.calls)
+	}
+	if n := strings.Count(stderr.String(), "Port 3000 is free."); n != 1 {
+		t.Errorf("free lines = %d, want 1; stderr = %q", n, stderr.String())
+	}
+}
+
+func TestRun_KillHandlesLaterFindingWhilePortStaysBusy(t *testing.T) {
+	c := &freeingSockets{}
+	first := &fakeTerminator{describe: "kill -TERM 42"}
+	second := &fakeTerminator{describe: "kill -TERM 43", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(first, c)
+	d.Sockets = twoPIDSockets{c}
+	d.Detector = perPIDDetector{42: first, 43: second}
+
+	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if first.calls != 1 || second.calls != 1 {
+		t.Errorf("calls = %d/%d, want 1/1", first.calls, second.calls)
+	}
+}
+
+// twoPIDSockets lists two different processes on port 3000 until freed.
+type twoPIDSockets struct{ c *freeingSockets }
+
+func (s twoPIDSockets) Sockets(ctx context.Context) ([]socket.Socket, error) {
+	all, err := s.c.Sockets(ctx)
+	if len(all) == 0 {
+		return all, err
+	}
+	return []socket.Socket{listener(3000, 42), listener(3000, 43)}, err
+}
+
+// perPIDDetector explains a socket with the terminator of its owning PID.
+type perPIDDetector map[int]kill.Terminator
+
+func (p perPIDDetector) Detect(_ context.Context, s socket.Socket, _ *proc.Process) (*detect.Explanation, bool) {
+	return &detect.Explanation{Source: detect.SourceProcess, Title: "node", Terminator: p[s.PID]}, true
 }
 
 // twoSockets lists the same process twice (IPv4 and IPv6) until freed.
@@ -640,7 +706,7 @@ func TestRun_KillReportsStatusLinesAndAResultBox(t *testing.T) {
 
 func TestRun_KillDeclinedShowsLeftUntouched(t *testing.T) {
 	d, stderr := killDeps(&fakeTerminator{describe: "x"}, &freeingSockets{})
-	d.IsTTY, d.StdinIsTTY = true, true
+	d.StdinIsTTY, d.StderrIsTTY = true, true
 	d.Stdin = strings.NewReader("n\n")
 
 	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true})
@@ -683,5 +749,103 @@ func TestRootCmd_ExpandedFlagIsParsed(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), " Summary ") {
 		t.Errorf("--expanded not applied:\n%s", stdout.String())
+	}
+}
+
+func TestRun_PlainWritesOneLinePerSocket(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3001, 43), listener(3000, 42)}})
+
+	got := Run(context.Background(), d, nil, Flags{Plain: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	want := "3000\ttcp\t127.0.0.1\t42\tprocess\tnode\n3001\ttcp\t127.0.0.1\t43\tprocess\tnode\n"
+	if stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRun_PlainFreePortPrintsNothingExit1(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Plain: true})
+
+	if got != 1 {
+		t.Errorf("exit = %d, want 1", got)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestRun_PlainWithJSONExit2(t *testing.T) {
+	d, stdout, stderr := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Plain: true, JSON: true})
+
+	if got != 2 {
+		t.Errorf("exit = %d, want 2", got)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "--plain and --json cannot be combined") {
+		t.Errorf("stderr = %q, want it to explain the conflict", stderr.String())
+	}
+}
+
+func TestRootCmd_PlainFlagIsParsed(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	cmd, exit := newRootCmd(d)
+	cmd.SetArgs([]string{"--plain", "3000"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if *exit != 0 || !strings.HasPrefix(stdout.String(), "3000\ttcp\t") {
+		t.Errorf("exit = %d, stdout = %q", *exit, stdout.String())
+	}
+}
+
+func TestRun_KillNeedsStderrTTYForPrompt(t *testing.T) {
+	ft := &fakeTerminator{describe: "x"}
+	d, _ := killDeps(ft, &freeingSockets{})
+	d.IsTTY, d.StdinIsTTY, d.StderrIsTTY = true, true, false
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 3 {
+		t.Errorf("exit = %d, want 3", got)
+	}
+	if ft.calls != 0 {
+		t.Errorf("Terminate calls = %d, want 0", ft.calls)
+	}
+}
+
+func TestRun_KillPromptDoesNotNeedStdoutTTY(t *testing.T) {
+	c := &freeingSockets{}
+	ft := &fakeTerminator{describe: "x", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(ft, c)
+	d.IsTTY, d.StdinIsTTY, d.StderrIsTTY = false, true, true
+	d.Stdin = strings.NewReader("y\n")
+
+	if got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true}); got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if ft.calls != 1 {
+		t.Errorf("Terminate calls = %d, want 1", ft.calls)
+	}
+}
+
+func TestRun_KillDryRunInvisibleOwnerIsAHintNotAFailure(t *testing.T) {
+	d, stderr := killDeps(nil, &freeingSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, DryRun: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0 (busy and explained, no kill failure)", got)
+	}
+	if !strings.Contains(stderr.String(), "not visible") {
+		t.Errorf("stderr = %q, want a hint about the invisible owner", stderr.String())
 	}
 }

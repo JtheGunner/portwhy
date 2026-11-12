@@ -25,7 +25,9 @@ const (
 
 // Flags are the command line options.
 type Flags struct {
-	JSON    bool
+	JSON bool
+	// Plain prints one tab-separated line per socket for grep and awk.
+	Plain   bool
 	NoColor bool
 	Kill    bool
 	Yes     bool
@@ -45,8 +47,14 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	if err != nil {
 		return fail(d, err)
 	}
+	if flags.Plain && flags.JSON {
+		return fail(d, errors.New("--plain and --json cannot be combined"))
+	}
 	if flags.Yes && !flags.Kill {
 		return fail(d, errors.New("--yes requires --kill"))
+	}
+	if flags.Force && !flags.Kill {
+		return fail(d, errors.New("--force requires --kill"))
 	}
 
 	svc := report.Service{Sockets: d.Sockets, Procs: d.Procs, Detector: d.Detector}
@@ -82,7 +90,7 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 		Yes:         flags.Yes,
 		Force:       flags.Force,
 		DryRun:      flags.DryRun,
-		Interactive: d.IsTTY && d.StdinIsTTY,
+		Interactive: d.StdinIsTTY && d.StderrIsTTY,
 		In:          d.Stdin,
 		Out:         d.Stderr,
 	}
@@ -102,9 +110,19 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 	}()
 
 	for _, r := range reports {
-		for _, f := range r.Findings {
+		for i, f := range r.Findings {
+			if i > 0 && !flags.DryRun && portIsFree(ctx, check, r.Port) {
+				// An earlier stop already freed the port; the remaining findings
+				// belong to processes that are gone. The stop line was printed.
+				break
+			}
 			if f.Explanation.Terminator == nil {
-				line(render.KillFailed, r.Port, "cannot stop it: the owning process is not visible; try again with sudo")
+				const hint = "cannot stop it: the owning process is not visible; try again with sudo"
+				if flags.DryRun {
+					_, _ = fmt.Fprintln(d.Stderr, render.KillLine(render.KillFailed, r.Port, hint, ropts))
+					continue
+				}
+				line(render.KillFailed, r.Port, hint)
 				failed = true
 				continue
 			}
@@ -132,6 +150,13 @@ func stopAll(ctx context.Context, d Deps, reports []report.PortReport, flags Fla
 	return failed
 }
 
+// portIsFree reports whether the port is verifiably free. A failing check
+// counts as busy so a stop is never skipped on doubt.
+func portIsFree(ctx context.Context, check kill.PortChecker, port uint16) bool {
+	free, err := check(ctx, port)
+	return err == nil && free
+}
+
 // portFree returns a kill.PortChecker that treats any listening socket on the
 // port, including one whose owner is not visible, as busy.
 func portFree(c socket.Collector) kill.PortChecker {
@@ -152,6 +177,9 @@ func portFree(c socket.Collector) kill.PortChecker {
 func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source, available []report.SourceCount) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
+	}
+	if flags.Plain {
+		return render.Plain(d.Stdout, reports)
 	}
 	if len(reports) == 0 {
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))

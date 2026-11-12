@@ -107,6 +107,25 @@ With `--kill`, every port gets a status line (`✓` stopped, `ℹ` left untouche
 > [!TIP]
 > Add `--dry-run` to `--kill` to see exactly what would be executed without stopping anything.
 
+### 📄 Plain output
+
+`--plain` prints one line per listening socket, without grouping, colour or shortening, for `grep`, `awk` and `cut`. Columns are separated by a tab, in this fixed order:
+
+| # | Column | Example |
+| :-: | --- | --- |
+| 1 | port | `5432` |
+| 2 | protocol (`tcp` or `udp`) | `tcp` |
+| 3 | address | `0.0.0.0` |
+| 4 | PID (`0` if the owner is not visible) | `812` |
+| 5 | source that explained the socket (`docker`, `systemd`, `launchd`, `process`) | `docker` |
+| 6 | process name (`-` if the owner is not visible) | `postgres` |
+
+Lines are ordered by port, protocol, address and PID. A socket with a hidden owner gets its own line. A port with no listener prints nothing. Exit codes are unchanged, and `--plain` cannot be combined with `--json` (exit code 2).
+
+```bash
+portwhy --plain | awk -F'\t' '$5 == "docker" { print $1 }'
+```
+
 ---
 
 ## 🚩 Flags
@@ -115,10 +134,11 @@ With `--kill`, every port gets a status line (`✓` stopped, `ℹ` left untouche
 | :-: | --- | --- |
 | 🛑 | `-k`, `--kill` | stop the cause of a busy port after confirmation |
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
-| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
+| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (requires `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
 | 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
+| 📄 | `--plain` | print one tab-separated line per socket: port, protocol, address, PID, source, name (cannot be combined with `--json`) |
 | 🎨 | `--no-color` | disable coloured output (`NO_COLOR`, `TERM=dumb` and non-TTY output are honoured too) |
 | 🪟 | `--expanded` | show the overview of all ports in the airy layout, one row per port |
 | ↔️ | `--wide` | use the full terminal width and keep long values intact |

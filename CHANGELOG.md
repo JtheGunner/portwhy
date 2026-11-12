@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `--plain` prints one tab-separated line per socket (port, protocol, address, PID, source, name) for `grep` and `awk`. Combining it with `--json` is an error.
+
 ## [0.3.0] - 2026-11-12
 
 ### Added
