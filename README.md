@@ -43,24 +43,42 @@ portwhy is one static binary for macOS and Linux (amd64 and arm64).
 ## 🚀 Usage
 
 ```bash
-portwhy 3000          # explain one port
-portwhy 3000 5432     # several ports
-portwhy 3000-3010     # a range
-portwhy               # every listening port
+portwhy               # overview of every listening port, grouped by service
+portwhy 3000-3010     # overview of a range
+portwhy 3000          # explain one port in detail
+portwhy 3000 5432     # several ports in detail
 portwhy 3000 --kill   # explain, then stop the cause after confirmation
 ```
 
-A busy port is explained, a free one says so:
+Without arguments, and for ranges, portwhy prints an overview: busy sockets grouped by the service or process that owns them, with the ports of one owner on a single line. Free ports are left out.
+
+```text
+$ portwhy
+Homebrew service "php@8.4"
+  9000                tcp  127.0.0.1     php-fpm (PID 3884) +2 more
+Docker container "db" (postgres:16)
+  5432                tcp  0.0.0.0    !  postgres (PID 812)
+Spotify
+  1900, 5353          udp  0.0.0.0    !  PID 13250
+node
+  3000, 3100, 3306    tcp  127.0.0.1     PID 3983
++ 2 sockets with hidden owner (22, 88). Run with sudo.
+! reachable from the network (bound to all interfaces)
+Details: portwhy 3000
+```
+
+A named port gets a detailed block that names the service, lists its facts and shows how it would be stopped. A free port says so:
 
 ```text
 $ portwhy 9000 59999
-:9000  TCP 127.0.0.1  → php-fpm: (PID 3884) · Homebrew service "php@8.4"
-       Label homebrew.mxcl.php@8.4 · Process php-fpm: (PID 3884) · Uptime 6d 1h
-       Stop: brew services stop php@8.4
+:9000  TCP 127.0.0.1  Homebrew service "php@8.4"
+       Process  php-fpm (PID 3884) +2 more
+       Facts    Label homebrew.mxcl.php@8.4 · Uptime 6d 2h
+       Stop     brew services stop php@8.4
 :59999  free
 ```
 
-When several processes hold the same port, each one gets its own block. Ranges and the all-ports list print only busy ports.
+Several processes of one service on the same port (a master and its workers) share one block. On a terminal, long values such as the command line are shortened to the terminal width; piped output is never shortened. Use `--wide` to keep long lines on a terminal as well.
 
 > [!TIP]
 > Add `--dry-run` to `--kill` to see exactly what would be executed without stopping anything.
@@ -76,7 +94,8 @@ When several processes hold the same port, each one gets its own block. Ranges a
 | 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
-| 🎨 | `--no-color` | disable coloured output (`NO_COLOR` and non-TTY output are honoured too) |
+| 🎨 | `--no-color` | disable coloured output (`NO_COLOR`, `TERM=dumb` and non-TTY output are honoured too) |
+| ↔️ | `--wide` | do not shorten long lines to the terminal width |
 | 🏷️ | `-v`, `--version` | print the version |
 
 ---
