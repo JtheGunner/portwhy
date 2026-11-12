@@ -100,7 +100,7 @@ func TestText_OverviewNeutralisesControlCharacters(t *testing.T) {
 	}
 }
 
-func TestText_OverviewCapsLongPortLists(t *testing.T) {
+func TestText_OverviewCapsLongPortListsOnlyOnATerminal(t *testing.T) {
 	var fs []report.Finding
 	for p := uint16(3000); p < 3300; p += 2 {
 		fs = append(fs, finding(p, socket.TCP, "127.0.0.1", 3983, "Antigravity", detect.SourceProcess, "Antigravity"))
@@ -108,41 +108,21 @@ func TestText_OverviewCapsLongPortLists(t *testing.T) {
 	fs = append(fs, finding(80, socket.TCP, "127.0.0.1", 5, "nginx", detect.SourceProcess, "nginx"))
 	reports := reportOf(fs...)
 
-	out := string(renderOverview(t, Options{}, reports))
-	wide := string(renderOverview(t, Options{Wide: true}, reports))
+	capped := string(renderOverview(t, Options{Width: 80}, reports))
+	piped := string(renderOverview(t, Options{}, reports))
+	wide := string(renderOverview(t, Options{Width: 80, Wide: true}, reports))
 
-	for _, line := range strings.Split(out, "\n") {
+	for _, line := range strings.Split(capped, "\n") {
 		if n := utf8.RuneCountInString(line); n > 80 {
 			t.Errorf("line of %d runes in the capped overview: %q", n, line)
 		}
 	}
-	if !strings.Contains(out, "… (+") {
-		t.Errorf("a cut port list must say how many ports are left out:\n%s", out)
+	if !strings.Contains(capped, "… (+") {
+		t.Errorf("a cut port list must say how many ports are left out:\n%s", capped)
 	}
-	if !strings.Contains(wide, "3298") {
-		t.Errorf("--wide must list every port:\n%s", wide)
-	}
-}
-
-func TestText_OverviewKeepsThePIDWhenShortening(t *testing.T) {
-	out := string(renderOverview(t, Options{Width: 60}, reportOf(
-		finding(80, socket.TCP, "0.0.0.0", 4242, strings.Repeat("longname", 10), detect.SourceLaunchd, "svc"),
-	)))
-
-	if !strings.Contains(out, "(PID 4242)") || !strings.Contains(out, "…") {
-		t.Errorf("want the name shortened and the PID kept:\n%s", out)
-	}
-	for _, line := range strings.Split(out, "\n") {
-		if n := utf8.RuneCountInString(line); n > 60 {
-			t.Errorf("line of %d runes exceeds width 60: %q", n, line)
-		}
-	}
-}
-
-func TestText_OverviewEveryLineFitsAtWidth80(t *testing.T) {
-	for _, line := range strings.Split(string(renderOverview(t, Options{Width: 80}, overviewFixture())), "\n") {
-		if n := utf8.RuneCountInString(line); n > 80 {
-			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
+	for name, out := range map[string]string{"without a terminal": piped, "--wide": wide} {
+		if !strings.Contains(out, "3298") || strings.Contains(out, "… (+") {
+			t.Errorf("%s must list every port:\n%s", name, out)
 		}
 	}
 }

@@ -18,7 +18,8 @@ const (
 	minNameWidth = 4
 	// maxHiddenPorts bounds the ports named in the hidden-owner summary.
 	maxHiddenPorts = 8
-	// maxPortsWidth bounds the ports column; --wide lifts the bound.
+	// maxPortsWidth bounds the ports column on a terminal; --wide and output
+	// without a terminal list every port.
 	maxPortsWidth = 28
 
 	rowIndent  = "  "
@@ -39,9 +40,9 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 		limit = 0
 	}
 
-	portsLimit := maxPortsWidth
-	if opts.Wide {
-		portsLimit = 0
+	portsLimit := 0
+	if limit > 0 {
+		portsLimit = maxPortsWidth
 	}
 	portsW, addrW := 0, 0
 	exposed := false
