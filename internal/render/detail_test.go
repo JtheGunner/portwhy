@@ -230,3 +230,47 @@ func TestText_DetailLongHeadlineAndProcessNameFitTheWidth(t *testing.T) {
 		}
 	}
 }
+
+func overlongCommandReport(command string) report.PortReport {
+	r := processReport()
+	r.Findings[0].Explanation.Details[0].Value = command
+	return r
+}
+
+func TestText_DetailOverlongCommandGolden(t *testing.T) {
+	r := overlongCommandReport("java -cp " + strings.Repeat("/opt/app/lib/dependency-with-a-long-name.jar:", 12) + " com.example.Main")
+	var buf strings.Builder
+	if err := Text(&buf, []report.PortReport{r}, Options{Width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	golden(t, "text_detail_overlong_command.golden", []byte(buf.String()))
+}
+
+func TestText_DetailTruncatedCommandKeepsMultibyteRunesWhole(t *testing.T) {
+	r := overlongCommandReport(strings.Repeat("größe-日本語-", 40))
+	var buf strings.Builder
+	if err := Text(&buf, []report.PortReport{r}, Options{Width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+	if !utf8.ValidString(out) {
+		t.Errorf("truncation split a UTF-8 character:\n%q", out)
+	}
+	if !strings.Contains(out, "…") {
+		t.Errorf("an over-long command should end in an ellipsis:\n%s", out)
+	}
+}
+
+func TestJSON_DetailKeepsFullCommand(t *testing.T) {
+	command := strings.Repeat("--flag=value ", 60)
+	var buf strings.Builder
+	if err := JSON(&buf, []report.PortReport{overlongCommandReport(command)}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(buf.String(), command) {
+		t.Errorf("JSON must carry the full command:\n%s", buf.String())
+	}
+}
