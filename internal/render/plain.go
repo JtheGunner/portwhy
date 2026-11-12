@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/JtheGunner/portwhy/internal/report"
+	"github.com/JtheGunner/portwhy/internal/textutil"
 )
 
 // plainEmpty stands in for a column without a value, such as the name of a
@@ -38,7 +39,7 @@ func Plain(w io.Writer, reports []report.PortReport) error {
 		for _, f := range r.Findings {
 			row := plainRow{
 				port:   f.Socket.Port,
-				proto:  string(f.Socket.Protocol),
+				proto:  plainField(string(f.Socket.Protocol)),
 				addr:   f.Socket.Addr.String(),
 				pid:    f.Socket.PID,
 				source: plainField(string(f.Explanation.Source)),
@@ -74,9 +75,10 @@ func Plain(w io.Writer, reports []report.PortReport) error {
 }
 
 // plainField makes a value safe as a single tab-separated column: tabs and
-// line breaks become spaces, and an empty value becomes "-".
+// line breaks become spaces, other control characters (such as ESC) become '?',
+// and an empty value becomes "-".
 func plainField(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
+	s = textutil.Clean(strings.Join(strings.Fields(s), " "))
 	if s == "" {
 		return plainEmpty
 	}

@@ -79,6 +79,35 @@ func TestPlain_KeepsLongNamesAndNeutralisesTabs(t *testing.T) {
 	}
 }
 
+func TestPlain_ReplacesControlCharactersInNameAndSource(t *testing.T) {
+	out := renderPlain(t, reportOf(
+		finding(80, socket.TCP, "0.0.0.0", 1, "\x1b[31mred\x1b[0m", detect.Source("src\x07\x9b"), "t"),
+	))
+
+	if strings.Contains(out, "\x1b") || strings.ContainsAny(out, "\x07\x9b") {
+		t.Errorf("output contains control characters: %q", out)
+	}
+	want := "80\ttcp\t0.0.0.0\t1\tsrc??\t?[31mred?[0m\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	if n := len(strings.Split(strings.TrimSuffix(out, "\n"), "\t")); n != 6 {
+		t.Errorf("got %d columns, want 6", n)
+	}
+}
+
+func TestPlain_KeepsUnicodeNames(t *testing.T) {
+	out := renderPlain(t, reportOf(
+		finding(80, socket.TCP, "0.0.0.0", 1, "LM Studio", detect.SourceProcess, "t"),
+		finding(81, socket.TCP, "0.0.0.0", 2, "café", detect.SourceProcess, "t"),
+	))
+
+	want := "80\ttcp\t0.0.0.0\t1\tprocess\tLM Studio\n81\ttcp\t0.0.0.0\t2\tprocess\tcafé\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
 func TestPlain_NoSocketsWritesNothing(t *testing.T) {
 	if out := renderPlain(t, nil); out != "" {
 		t.Errorf("got %q, want empty output", out)
