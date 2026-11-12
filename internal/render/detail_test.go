@@ -143,3 +143,48 @@ func TestText_DetailDifferentPortsStaySeparate(t *testing.T) {
 		t.Errorf("each requested port keeps its own block:\n%s", out)
 	}
 }
+
+func launchdJobReport() report.PortReport {
+	return report.PortReport{Port: 18789, Findings: []report.Finding{{
+		Socket:  socket.Socket{Port: 18789, Protocol: socket.TCP, Addr: netip.MustParseAddr("0.0.0.0"), State: socket.Listen, PID: 3863},
+		Process: &proc.Process{PID: 3863, Name: "node"},
+		Explanation: detect.Explanation{
+			Source:     detect.SourceLaunchd,
+			Title:      `launchd job "ai.openclaw.gateway"`,
+			Details:    []detect.Detail{{Key: "Domain", Value: "gui/501"}, {Key: "Uptime", Value: "6d 2h"}},
+			Hints:      []string{"launchd restarts it after a plain kill if KeepAlive is set; unloading the job keeps it down until the next login"},
+			Terminator: fakeTerminator("launchctl bootout gui/501/ai.openclaw.gateway"),
+		},
+		Advice: []advise.Advice{{Level: advise.Warn, Text: "Reachable from the network (bound to all interfaces)."}},
+	}}}
+}
+
+func TestText_DetailEveryLineFitsTheWidth(t *testing.T) {
+	var buf strings.Builder
+	reports := []report.PortReport{launchdJobReport(), processReport(), timeWaitAdviceReport()}
+	if err := Text(&buf, reports, Options{Width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if n := utf8.RuneCountInString(line); n > 80 {
+			t.Errorf("line of %d runes exceeds width 80: %q", n, line)
+		}
+	}
+	golden(t, "text_detail_wrapped.golden", []byte(buf.String()))
+}
+
+func TestText_DetailWrappingKeepsTheWholeHint(t *testing.T) {
+	var buf strings.Builder
+	if err := Text(&buf, []report.PortReport{launchdJobReport()}, Options{Width: 60}); err != nil {
+		t.Fatal(err)
+	}
+
+	flat := strings.Join(strings.Fields(buf.String()), " ")
+	if !strings.Contains(flat, "KeepAlive is set; unloading the job keeps it down until the next login)") {
+		t.Errorf("hint lost in wrapping:\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "launchctl bootout gui/501/ai.openclaw.gateway\n") {
+		t.Errorf("the stop command must stay on one line:\n%s", buf.String())
+	}
+}

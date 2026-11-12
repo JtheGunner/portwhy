@@ -40,6 +40,11 @@ type detailRow struct {
 	value        string
 	// shorten marks values that are cut at the terminal width.
 	shorten bool
+	// wrap marks values that continue on further lines at the terminal width.
+	wrap bool
+	// tail follows value, on the same line when it fits and on wrapped
+	// continuation lines otherwise. value itself is never broken.
+	tail string
 }
 
 // blockKey identifies the findings that merge into one block: the same
@@ -58,7 +63,7 @@ func writeDetail(b *strings.Builder, r report.PortReport, opts Options) {
 	if len(r.Findings) == 0 {
 		if r.TimeWaitOnly {
 			fmt.Fprintf(b, ":%d  free (only lingering time_wait connections)\n", r.Port)
-			writeAdvice(b, r.Advice, opts.Colors)
+			writeAdvice(b, r.Advice, opts)
 			return
 		}
 		fmt.Fprintf(b, ":%d  free\n", r.Port)
@@ -106,12 +111,32 @@ func writeBlock(b *strings.Builder, findings []report.Finding, opts Options) {
 			label = c.dim(r.label)
 		}
 		label += strings.Repeat(" ", labelWidth-utf8.RuneCountInString(r.label))
-		value := r.value
-		if r.shorten {
-			value = fit(value, valueWidth)
+		lines := rowLines(r, valueWidth)
+		fmt.Fprintf(b, "%s%s%s%s\n", indent, label, labelGap, lines[0])
+		for _, line := range lines[1:] {
+			fmt.Fprintf(b, "%s%s%s%s\n", indent, strings.Repeat(" ", labelWidth), labelGap, line)
 		}
-		fmt.Fprintf(b, "%s%s%s%s\n", indent, label, labelGap, value)
 	}
+}
+
+// rowLines is the text of a row split for a value column of width runes
+// (0 means unlimited).
+func rowLines(r detailRow, width int) []string {
+	value := r.value
+	if r.shorten {
+		value = fit(value, width)
+	}
+	if r.tail != "" {
+		joined := value + "   " + r.tail
+		if width <= 0 || utf8.RuneCountInString(joined) <= width {
+			return []string{joined}
+		}
+		return append([]string{value}, wrapWords(r.tail, width)...)
+	}
+	if r.wrap {
+		return wrapWords(value, width)
+	}
+	return []string{value}
 }
 
 // pidOf is the PID that identifies a finding; 0 when the owner is not visible.
@@ -175,7 +200,7 @@ func detailRows(details []detect.Detail) []detailRow {
 		fact := strings.TrimSpace(key + " " + value)
 		if facts < 0 {
 			facts = len(rows)
-			rows = append(rows, detailRow{label: labelFacts, value: fact})
+			rows = append(rows, detailRow{label: labelFacts, value: fact, wrap: true})
 			continue
 		}
 		rows[facts].value += " · " + fact
@@ -209,14 +234,12 @@ func stopRows(findings []report.Finding) []detailRow {
 		row := detailRow{value: s}
 		if i == 0 {
 			row.label = labelStop
-			if hintText != "" {
-				row.value += "   " + hintText
-			}
+			row.tail = hintText
 		}
 		rows = append(rows, row)
 	}
 	if len(stops) == 0 && hintText != "" {
-		rows = append(rows, detailRow{label: labelNote, value: hintText})
+		rows = append(rows, detailRow{label: labelNote, value: hintText, wrap: true})
 	}
 	return rows
 }
@@ -237,17 +260,30 @@ func adviceRows(findings []report.Finding, c Colors) []detailRow {
 		if a.Level == advise.Warn {
 			marker, code = "!", ansiYellow
 		}
-		rows = append(rows, detailRow{label: marker, paintedLabel: c.paint(code, marker), value: textutil.Clean(a.Text)})
+		rows = append(rows, detailRow{label: marker, paintedLabel: c.paint(code, marker), value: textutil.Clean(a.Text), wrap: true})
 	}
 	return rows
 }
 
-func writeAdvice(b *strings.Builder, advice []advise.Advice, c Colors) {
+// writeAdvice writes the advice of a port without a block of its own, wrapped
+// to the terminal width with a hanging indent under the marker.
+func writeAdvice(b *strings.Builder, advice []advise.Advice, opts Options) {
+	c := opts.Colors
+	width := 0
+	if opts.Width > 0 && !opts.Wide {
+		width = max(opts.Width-len(indent)-2, minProcessWidth)
+	}
 	for _, a := range advice {
 		marker := c.paint(ansiCyan, "i")
 		if a.Level == advise.Warn {
 			marker = c.paint(ansiYellow, "!")
 		}
-		fmt.Fprintf(b, "%s%s %s\n", indent, marker, textutil.Clean(a.Text))
+		for i, line := range wrapWords(textutil.Clean(a.Text), width) {
+			lead := marker
+			if i > 0 {
+				lead = " "
+			}
+			fmt.Fprintf(b, "%s%s %s\n", indent, lead, line)
+		}
 	}
 }

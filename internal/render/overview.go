@@ -65,13 +65,18 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 		}
 	}
 
+	footer := func(text string) {
+		for _, line := range wrapWords(text, limit) {
+			fmt.Fprintln(b, c.dim(line))
+		}
+	}
 	if len(ov.Hidden) > 0 {
-		fmt.Fprintln(b, c.dim(hiddenSummary(ov.Hidden)))
+		footer(hiddenSummary(ov.Hidden))
 	}
 	if exposed {
-		fmt.Fprintln(b, c.dim(exposedTag+" reachable from the network (bound to all interfaces)"))
+		footer(exposedTag + " reachable from the network (bound to all interfaces)")
 	}
-	fmt.Fprintln(b, c.dim(fmt.Sprintf("Details: portwhy %d", lowestPort(ov))))
+	footer(fmt.Sprintf("Details: portwhy %d", lowestPort(ov)))
 }
 
 // processLabel names the owner of a row: "name (PID n)" below a service title,

@@ -24,3 +24,26 @@ func padRight(s string, width int) string {
 	}
 	return s
 }
+
+// wrapWords breaks s at spaces into lines of at most width runes. A word
+// longer than width stays whole on a line of its own. A width of 0 or less
+// means unlimited.
+func wrapWords(s string, width int) []string {
+	if width <= 0 || utf8.RuneCountInString(s) <= width {
+		return []string{s}
+	}
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = word
+		case utf8.RuneCountInString(line)+1+utf8.RuneCountInString(word) <= width:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	return append(lines, line)
+}
