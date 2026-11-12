@@ -1,13 +1,11 @@
-Spotify
-  1900, 5353              udp  0.0.0.0    !  PID 13250
-Antigravity
-  3000, 3100, 3306, 3890  tcp  127.0.0.1     PID 3983
-Docker container "db" (postgres:16)
-  5432                    tcp  0.0.0.0    !  pos… (PID 812)
-Homebrew service "php@8.4"
-  9000                    tcp  127.0.0.1     php… (PID 3884) +2 more
-+ 5 sockets with hidden owner (22, 88, 137, 138,
-445). Run with sudo.
-! reachable from the network (bound to all
-interfaces)
-Details: portwhy 1900
+     Service       Ports                   Proto  Bind       Owner
+────────────────────────────────────────────────────────────
+  ⚠  Spotify       1900, 5353              udp    0.0.0.0    PID 13250
+     Antigravity   3000, 3100, 3306, 3890  tcp    127.0.0.1  PID 3983
+  ⚠  Docker cont…  5432                    tcp    0.0.0.0    pos… (PID 812)
+     Homebrew se…  9000                    tcp    127.0.0.1  php… (PID 3884) +2 more
+  ⚠  Owner not v…  22, 88, 137, 138, 445   tcp    0.0.0.0    run with sudo
+────────────────────────────────────────────────────────────
+  13 busy ports · 4 services
+  ⚠ 8 reachable from the network · 5 ports with hidden owner
+  ℹ  Details: portwhy 1900    Airy view: --expanded

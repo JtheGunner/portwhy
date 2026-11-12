@@ -155,49 +155,49 @@ func TestRun_ExplicitPortNotMatchingFilterIsNotReportedFree(t *testing.T) {
 	}
 }
 
-func TestRun_ListModeEndsWithSourcesFooter(t *testing.T) {
+func TestRun_ListModeHintNamesTheSources(t *testing.T) {
 	d, stdout, _ := mixedDeps()
 
 	Run(context.Background(), d, nil, Flags{})
 
-	want := "Sources: docker (2) · process (1) — filter with --source <name>\n"
+	want := "Filter: --source docker|process\n"
 	if !strings.HasSuffix(stdout.String(), want) {
 		t.Errorf("stdout = %q, want it to end with %q", stdout.String(), want)
 	}
 }
 
-func TestRun_FooterListsAllSourcesEvenWhenFiltered(t *testing.T) {
+func TestRun_HintListsAllSourcesEvenWhenFiltered(t *testing.T) {
 	d, stdout, _ := mixedDeps()
 
 	Run(context.Background(), d, nil, Flags{Source: []string{"docker"}})
 
-	want := "Sources: docker (2) · process (1) — filter with --source <name>\n"
+	want := "Filter: --source docker|process\n"
 	if !strings.HasSuffix(stdout.String(), want) {
-		t.Errorf("stdout = %q, want the unfiltered footer %q", stdout.String(), want)
+		t.Errorf("stdout = %q, want the unfiltered hint %q", stdout.String(), want)
 	}
 }
 
-func TestRun_NoFooterWithPortArguments(t *testing.T) {
+func TestRun_NoFilterHintWithPortArguments(t *testing.T) {
 	d, stdout, _ := mixedDeps()
 
 	Run(context.Background(), d, []string{"3000-9000"}, Flags{})
 
-	if strings.Contains(stdout.String(), "Sources:") {
-		t.Errorf("stdout = %q, want no footer outside list mode", stdout.String())
+	if strings.Contains(stdout.String(), "--source") {
+		t.Errorf("stdout = %q, want no filter hint outside the all-ports list", stdout.String())
 	}
 }
 
-func TestRun_NoFooterInJSON(t *testing.T) {
+func TestRun_NoFilterHintInJSON(t *testing.T) {
 	d, stdout, _ := mixedDeps()
 
 	Run(context.Background(), d, nil, Flags{JSON: true})
 
-	if strings.Contains(stdout.String(), "Sources:") {
-		t.Errorf("stdout = %q, want JSON without the text footer", stdout.String())
+	if strings.Contains(stdout.String(), "--source") {
+		t.Errorf("stdout = %q, want JSON without the text hint", stdout.String())
 	}
 }
 
-func TestRun_NoFooterWhenNothingIsBusy(t *testing.T) {
+func TestRun_NoHintWhenNothingIsBusy(t *testing.T) {
 	d, stdout, _ := testDeps(fakeSockets{})
 
 	Run(context.Background(), d, nil, Flags{})

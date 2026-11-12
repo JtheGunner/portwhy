@@ -1,2 +1,6 @@
-+ 1 socket with hidden owner (88). Run with sudo.
-Details: portwhy 88
+     Service / process  Ports  Proto  Bind     Owner
+────────────────────────────────────────────────────────────
+  ⚠  Owner not visible  88     tcp    0.0.0.0  run with sudo
+────────────────────────────────────────────────────────────
+  1 busy port · 0 services · ⚠ 1 reachable from the network · 1 port with hidden owner
+  ℹ  Details: portwhy 88    Airy view: --expanded

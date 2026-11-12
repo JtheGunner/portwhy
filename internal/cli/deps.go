@@ -28,6 +28,9 @@ type Deps struct {
 	// Width is the terminal width of Stdout in columns; 0 when Stdout is not a
 	// terminal or its size is unknown.
 	Width int
+	// ASCII selects plain ASCII symbols and line characters instead of
+	// Unicode; set from TERM and the locale.
+	ASCII bool
 	Pid   int
 }
 

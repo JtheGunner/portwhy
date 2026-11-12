@@ -60,13 +60,8 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	reports = report.FilterBySource(reports, sources)
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, args, flags, sources); err != nil {
+	if err := write(d, reports, args, flags, sources, available); err != nil {
 		return fail(d, err)
-	}
-	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
-		if err := render.Sources(d.Stdout, available, textOptions(d, args, flags)); err != nil {
-			return fail(d, err)
-		}
 	}
 	if flags.Kill && stopAll(ctx, d, reports, flags) {
 		return exitKillFailure
@@ -140,7 +135,7 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source) error {
+func write(d Deps, reports []report.PortReport, args []string, flags Flags, sources []detect.Source, available []report.SourceCount) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
@@ -148,17 +143,24 @@ func write(d Deps, reports []report.PortReport, args []string, flags Flags, sour
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
 		return err
 	}
-	return render.Text(d.Stdout, reports, textOptions(d, args, flags))
+	return render.Text(d.Stdout, reports, textOptions(d, args, flags, available))
 }
 
-// textOptions are the text layout settings for this run.
-func textOptions(d Deps, args []string, flags Flags) render.Options {
-	return render.Options{
+// textOptions are the text layout settings for this run. available are the
+// sources found before the --source filter; only the overview of all ports
+// names them, as the hint how to filter.
+func textOptions(d Deps, args []string, flags Flags, available []report.SourceCount) render.Options {
+	opts := render.Options{
 		Colors:   render.NewColors(d.IsTTY, flags.NoColor),
 		Width:    d.Width,
 		Wide:     flags.Wide,
 		Overview: overviewMode(args, flags.Kill),
+		ASCII:    d.ASCII,
 	}
+	if len(args) == 0 {
+		opts.Sources = available
+	}
+	return opts
 }
 
 // overviewMode reports whether the text output is the grouped overview: for

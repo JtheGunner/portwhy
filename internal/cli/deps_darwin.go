@@ -10,6 +10,7 @@ import (
 	"github.com/JtheGunner/portwhy/internal/detect/launchd"
 	"github.com/JtheGunner/portwhy/internal/execx"
 	"github.com/JtheGunner/portwhy/internal/proc"
+	"github.com/JtheGunner/portwhy/internal/render"
 	"github.com/JtheGunner/portwhy/internal/socket"
 )
 
@@ -34,6 +35,7 @@ func DefaultDeps() Deps {
 		Stderr:     os.Stderr,
 		IsTTY:      isTerminal(os.Stdout),
 		Width:      terminalWidth(os.Stdout),
+		ASCII:      render.UseASCII(os.Getenv),
 		Stdin:      os.Stdin,
 		StdinIsTTY: isTerminal(os.Stdin),
 		Pid:        os.Getpid(),

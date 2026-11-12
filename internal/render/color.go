@@ -75,3 +75,6 @@ func (c Colors) warn(s string) string { return c.paint(ansiYellow, s) }
 
 // boxBorder colours the frame of a summary box.
 func (c Colors) boxBorder(s string) string { return c.paint(ansiMagenta, s) }
+
+// number colours a count in a summary line.
+func (c Colors) number(s string) string { return c.paint(ansiBold+ansiCyan, s) }
