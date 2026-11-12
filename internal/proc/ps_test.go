@@ -272,7 +272,7 @@ func TestDarwinReader_AncestorDepthLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
-	if len(p.Ancestors) != maxAncestorDepth || maxAncestorDepth != 32 {
+	if len(p.Ancestors) != maxPSAncestorDepth || maxPSAncestorDepth != 32 {
 		t.Errorf("len(Ancestors) = %d, want 32", len(p.Ancestors))
 	}
 }

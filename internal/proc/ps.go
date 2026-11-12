@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// maxAncestorDepth bounds how far up the parent chain a reader walks.
-	maxAncestorDepth = 32
+	// maxPSAncestorDepth bounds how far up the parent chain a reader walks.
+	maxPSAncestorDepth = 32
 
 	// psLstartLayout is the layout of the ps "lstart" column. The "_2" verb
 	// accepts the space-padded day of month ("Nov  7").
@@ -91,12 +91,12 @@ func (r *psReader) readCwd(ctx context.Context, pid int) string {
 }
 
 // readAncestors walks the parent chain starting at ppid: parent first, then
-// grandparent, and so on. The walk ends at PID 1, after maxAncestorDepth
+// grandparent, and so on. The walk includes PID 1 and ends there, after maxPSAncestorDepth
 // entries, on a cycle, or when an ancestor cannot be read; it never fails.
 func (r *psReader) readAncestors(ctx context.Context, ppid, self int) []Ancestor {
 	var ancestors []Ancestor
 	seen := map[int]bool{self: true}
-	for pid := ppid; pid > 0 && !seen[pid] && len(ancestors) < maxAncestorDepth; {
+	for pid := ppid; pid > 0 && !seen[pid] && len(ancestors) < maxPSAncestorDepth; {
 		seen[pid] = true
 		p, err := r.readPS(ctx, pid)
 		if err != nil {
