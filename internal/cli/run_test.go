@@ -238,6 +238,19 @@ func TestRun_YesWithoutKillExit2(t *testing.T) {
 	}
 }
 
+func TestRun_ForceWithoutKillExit2(t *testing.T) {
+	d, _, stderr := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Force: true})
+
+	if got != 2 {
+		t.Errorf("exit = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "--force requires --kill") {
+		t.Errorf("stderr = %q, want it to contain %q", stderr.String(), "--force requires --kill")
+	}
+}
+
 func TestRun_NoColorWhenNotTTY(t *testing.T) {
 	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
 

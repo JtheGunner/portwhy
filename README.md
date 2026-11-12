@@ -115,7 +115,7 @@ With `--kill`, every port gets a status line (`✓` stopped, `ℹ` left untouche
 | :-: | --- | --- |
 | 🛑 | `-k`, `--kill` | stop the cause of a busy port after confirmation |
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
-| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
+| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (requires `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
 | 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |

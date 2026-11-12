@@ -48,6 +48,9 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	if flags.Yes && !flags.Kill {
 		return fail(d, errors.New("--yes requires --kill"))
 	}
+	if flags.Force && !flags.Kill {
+		return fail(d, errors.New("--force requires --kill"))
+	}
 
 	svc := report.Service{Sockets: d.Sockets, Procs: d.Procs, Detector: d.Detector}
 	reports, err := svc.Explain(ctx, ports)
