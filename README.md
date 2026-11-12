@@ -43,10 +43,11 @@ portwhy is one static binary for macOS and Linux (amd64 and arm64).
 ## 🚀 Usage
 
 ```bash
-portwhy               # overview of every listening port, grouped by service
-portwhy 3000-3010     # overview of a range
-portwhy 3000          # explain one port in detail
-portwhy 3000 5432     # several ports in detail
+portwhy 3000          # explain one port
+portwhy 3000 5432     # several ports
+portwhy 3000-3010     # a range
+portwhy               # every listening port
+portwhy --source docker  # only ports held by Docker containers
 portwhy 3000 --kill   # explain, then stop the cause after confirmation
 ```
 
@@ -80,6 +81,14 @@ $ portwhy 9000 59999
 
 Several processes of one service on the same port (a master and its workers) share one block. On a terminal, long values such as the command line are shortened to the terminal width; piped output is never shortened. Use `--wide` to keep long lines on a terminal as well.
 
+The all-ports list ends with a footer that names the sources currently in use, so you can see what to filter by:
+
+```text
+Sources: docker (2) · launchd (1) · process (4) — filter with --source <name>
+```
+
+`--source` accepts `docker`, `systemd`, `launchd` and `process` (a plain process without a service). Repeat the flag or separate values with commas to combine them. With `--kill`, the filter also limits which ports are stopped.
+
 > [!TIP]
 > Add `--dry-run` to `--kill` to see exactly what would be executed without stopping anything.
 
@@ -93,6 +102,7 @@ Several processes of one service on the same port (a master and its workers) sha
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
 | 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
+| 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
 | 🎨 | `--no-color` | disable coloured output (`NO_COLOR`, `TERM=dumb` and non-TTY output are honoured too) |
 | ↔️ | `--wide` | do not shorten long lines to the terminal width |
@@ -128,13 +138,20 @@ When several apply, the precedence is `2` > `3` > `0` > `1`.
 
 ## ⌨️ Shell completion
 
-Generate a completion script for your shell:
+Tab completes flags and the values of `--source` (`portwhy --source d<Tab>` → `docker`).
 
-```bash
-portwhy completion bash   # or: zsh, fish
-```
+With Homebrew the completions for bash, zsh and fish are installed automatically. Restart your shell to pick them up. For a manual install, load the script once:
 
-Run `portwhy completion <shell> --help` for the install steps of each shell.
+| | Shell | Enable for the current session | Enable permanently |
+| :-: | --- | --- | --- |
+| 🐚 | bash | `source <(portwhy completion bash)` | `portwhy completion bash > ~/.local/share/bash-completion/completions/portwhy` |
+| 🌀 | zsh | `source <(portwhy completion zsh)` | `portwhy completion zsh > "${fpath[1]}/_portwhy"` |
+| 🐟 | fish | `portwhy completion fish \| source` | `portwhy completion fish > ~/.config/fish/completions/portwhy.fish` |
+
+> [!NOTE]
+> bash needs the `bash-completion` package, and zsh needs `compinit` enabled in `~/.zshrc`.
+
+Run `portwhy completion <shell> --help` for more details on each shell.
 
 ---
 
