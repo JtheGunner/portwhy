@@ -27,8 +27,12 @@ type Options struct {
 func Text(w io.Writer, reports []report.PortReport, opts Options) error {
 	c := opts.Colors
 	var b strings.Builder
-	for _, r := range reports {
-		writeReport(&b, r, c)
+	if opts.Overview {
+		writeOverview(&b, reports, opts)
+	} else {
+		for _, r := range reports {
+			writeReport(&b, r, c)
+		}
 	}
 	if _, err := io.WriteString(w, b.String()); err != nil {
 		return fmt.Errorf("write text report: %w", err)

@@ -1,0 +1,11 @@
+[1mSpotify[0m
+  [1m1900, 5353            [0m  udp  0.0.0.0    [33m![0m  PID 13250
+[1mAntigravity[0m
+  [1m3000, 3100, 3306, 3890[0m  tcp  127.0.0.1     PID 3983
+[1mDocker container "db" (postgres:16)[0m
+  [1m5432                  [0m  tcp  0.0.0.0    [33m![0m  postgres (PID 812)
+[1mHomebrew service "php@8.4"[0m
+  [1m9000                  [0m  tcp  127.0.0.1     php-fpm (PID 3884) +2 more
+[2m+ 5 sockets with hidden owner (22, 88, 137, 138, 445). Run with sudo.[0m
+[2m! reachable from the network (bound to all interfaces)[0m
+[2mDetails: portwhy 1900[0m
