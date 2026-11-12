@@ -50,7 +50,7 @@ func (g generic) Detect(_ context.Context, _ socket.Socket, p *proc.Process) (*E
 	add("Command", strings.Join(p.Cmdline, " "))
 	add("User", p.User)
 	if !p.Started.IsZero() {
-		add("Uptime", formatUptime(g.now().Sub(p.Started)))
+		add("Uptime", FormatUptime(g.now().Sub(p.Started)))
 	}
 	add("Cwd", p.Cwd)
 	add("Started by", ancestorChain(*p))
@@ -73,8 +73,8 @@ func ancestorChain(p proc.Process) string {
 	return strings.Join(names, " ← ")
 }
 
-// formatUptime renders a duration using its two most significant units.
-func formatUptime(d time.Duration) string {
+// FormatUptime renders a duration using its two most significant units.
+func FormatUptime(d time.Duration) string {
 	if d < 0 {
 		d = 0
 	}

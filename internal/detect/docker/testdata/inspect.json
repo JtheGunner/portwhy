@@ -1,0 +1,5 @@
+{
+  "Id": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+  "State": {"Running": true, "StartedAt": "2026-11-09T10:00:00.123456789Z"},
+  "HostConfig": {"RestartPolicy": {"Name": "unless-stopped", "MaximumRetryCount": 0}}
+}

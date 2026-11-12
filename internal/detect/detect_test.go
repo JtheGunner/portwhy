@@ -136,8 +136,8 @@ func TestFormatUptime(t *testing.T) {
 		{50*time.Hour + 30*time.Minute, "2d 2h"},
 	}
 	for _, tt := range tests {
-		if got := formatUptime(tt.in); got != tt.want {
-			t.Errorf("formatUptime(%v) = %q, want %q", tt.in, got, tt.want)
+		if got := FormatUptime(tt.in); got != tt.want {
+			t.Errorf("FormatUptime(%v) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
