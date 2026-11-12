@@ -502,6 +502,60 @@ func TestRun_KillTerminatesSharedCauseOnce(t *testing.T) {
 	}
 }
 
+func TestRun_KillSkipsLaterFindingsOnceFirstFreedPort(t *testing.T) {
+	c := &freeingSockets{}
+	first := &fakeTerminator{describe: "brew services stop php", onTerm: func() { c.freed = true }}
+	second := &fakeTerminator{describe: "kill -TERM 43"}
+	d, stderr := killDeps(first, c)
+	d.Sockets = twoPIDSockets{c}
+	d.Detector = perPIDDetector{42: first, 43: second}
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	if first.calls != 1 || second.calls != 0 {
+		t.Errorf("calls = %d/%d, want 1/0", first.calls, second.calls)
+	}
+	if n := strings.Count(stderr.String(), "Port 3000 is free."); n != 1 {
+		t.Errorf("free lines = %d, want 1; stderr = %q", n, stderr.String())
+	}
+}
+
+func TestRun_KillHandlesLaterFindingWhilePortStaysBusy(t *testing.T) {
+	c := &freeingSockets{}
+	first := &fakeTerminator{describe: "kill -TERM 42"}
+	second := &fakeTerminator{describe: "kill -TERM 43", onTerm: func() { c.freed = true }}
+	d, _ := killDeps(first, c)
+	d.Sockets = twoPIDSockets{c}
+	d.Detector = perPIDDetector{42: first, 43: second}
+
+	Run(context.Background(), d, []string{"3000"}, Flags{Kill: true, Yes: true})
+
+	if first.calls != 1 || second.calls != 1 {
+		t.Errorf("calls = %d/%d, want 1/1", first.calls, second.calls)
+	}
+}
+
+// twoPIDSockets lists two different processes on port 3000 until freed.
+type twoPIDSockets struct{ c *freeingSockets }
+
+func (s twoPIDSockets) Sockets(ctx context.Context) ([]socket.Socket, error) {
+	all, err := s.c.Sockets(ctx)
+	if len(all) == 0 {
+		return all, err
+	}
+	return []socket.Socket{listener(3000, 42), listener(3000, 43)}, err
+}
+
+// perPIDDetector explains a socket with the terminator of its owning PID.
+type perPIDDetector map[int]kill.Terminator
+
+func (p perPIDDetector) Detect(_ context.Context, s socket.Socket, _ *proc.Process) (*detect.Explanation, bool) {
+	return &detect.Explanation{Source: detect.SourceProcess, Title: "node", Terminator: p[s.PID]}, true
+}
+
 // twoSockets lists the same process twice (IPv4 and IPv6) until freed.
 type twoSockets struct{ c *freeingSockets }
 
