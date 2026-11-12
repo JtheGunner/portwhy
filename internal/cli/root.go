@@ -42,6 +42,7 @@ func newRootCmd(d Deps) (*cobra.Command, *int) {
 	f.BoolVarP(&flags.Kill, "kill", "k", false, "stop the cause of a busy port after confirmation")
 	f.BoolVarP(&flags.Yes, "yes", "y", false, "skip the confirmation prompt (requires --kill)")
 	f.BoolVar(&flags.Force, "force", false, "send SIGKILL immediately (requires --kill)")
+	f.StringSliceVar(&flags.Source, "source", nil, "only show ports held by this source: docker, systemd, launchd or process (repeatable, comma-separated)")
 	f.BoolVar(&flags.DryRun, "dry-run", false, "show what --kill would do without doing it")
 	return cmd, exit
 }

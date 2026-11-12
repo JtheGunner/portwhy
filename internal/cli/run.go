@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
+	"github.com/JtheGunner/portwhy/internal/detect"
 	"github.com/JtheGunner/portwhy/internal/kill"
 	"github.com/JtheGunner/portwhy/internal/portspec"
 	"github.com/JtheGunner/portwhy/internal/render"
@@ -30,6 +32,9 @@ type Flags struct {
 	Yes     bool
 	Force   bool
 	DryRun  bool
+	// Source limits the listing, and with Kill the stop, to ports whose owner
+	// is one of these sources (docker, systemd, launchd, process).
+	Source []string
 }
 
 // Run explains the given port arguments and returns the process exit code.
@@ -47,10 +52,21 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 	if err != nil {
 		return fail(d, err)
 	}
+	available := report.CountSources(reports)
+	sources, err := parseSources(flags.Source, available)
+	if err != nil {
+		return fail(d, err)
+	}
+	reports = report.FilterBySource(reports, sources)
 	reports = visibleReports(reports, args)
 
-	if err := write(d, reports, flags); err != nil {
+	if err := write(d, reports, flags, sources); err != nil {
 		return fail(d, err)
+	}
+	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
+		if err := render.Sources(d.Stdout, available); err != nil {
+			return fail(d, err)
+		}
 	}
 	if flags.Kill && stopAll(ctx, d, reports, flags) {
 		return exitKillFailure
@@ -124,16 +140,60 @@ func portFree(c socket.Collector) kill.PortChecker {
 	}
 }
 
-func write(d Deps, reports []report.PortReport, flags Flags) error {
+func write(d Deps, reports []report.PortReport, flags Flags, sources []detect.Source) error {
 	if flags.JSON {
 		return render.JSON(d.Stdout, reports)
 	}
 	if len(reports) == 0 {
-		_, err := fmt.Fprintln(d.Stdout, "No busy ports.")
+		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
 		return err
 	}
 	colors := render.Colors{Enabled: d.IsTTY && !flags.NoColor && os.Getenv("NO_COLOR") == ""}
 	return render.Text(d.Stdout, reports, colors)
+}
+
+func noBusyPortsMessage(sources []detect.Source) string {
+	if len(sources) == 0 {
+		return "No busy ports."
+	}
+	names := make([]string, len(sources))
+	for i, s := range sources {
+		names[i] = string(s)
+	}
+	return "No busy ports from " + strings.Join(names, ", ") + "."
+}
+
+// knownSources are the values --source accepts. A known source that is not
+// currently listening is valid and simply matches nothing.
+var knownSources = []detect.Source{
+	detect.SourceDocker, detect.SourceSystemd, detect.SourceLaunchd, detect.SourceProcess,
+}
+
+// parseSources validates the --source values, case-insensitively and without
+// duplicates. An unknown value is an error that names the sources found now.
+func parseSources(values []string, available []report.SourceCount) ([]detect.Source, error) {
+	var out []detect.Source
+	for _, v := range values {
+		s := detect.Source(strings.ToLower(strings.TrimSpace(v)))
+		if !slices.Contains(knownSources, s) {
+			return nil, fmt.Errorf("unknown source %q; available now: %s", v, availableNames(available))
+		}
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func availableNames(available []report.SourceCount) string {
+	if len(available) == 0 {
+		return "none"
+	}
+	names := make([]string, len(available))
+	for i, c := range available {
+		names[i] = string(c.Source)
+	}
+	return strings.Join(names, ", ")
 }
 
 // visibleReports hides free ports unless they were requested as a single port.
