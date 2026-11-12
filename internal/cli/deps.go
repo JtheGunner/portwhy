@@ -34,15 +34,16 @@ func isTerminal(f *os.File) bool {
 }
 
 // newDetector builds the detector chain: Docker first when a daemon socket
-// exists, then fallback. Docker goes first because under Docker Desktop,
-// Colima and OrbStack the listening process is a VM helper that says nothing
-// about the container.
-func newDetector(fallback detect.Detector) detect.Detector {
+// exists, then the platform detectors in order, then fallback. Docker goes
+// first because under Docker Desktop, Colima and OrbStack the listening
+// process is a VM helper that says nothing about the container.
+func newDetector(fallback detect.Detector, platform ...detect.Detector) detect.Detector {
+	var chain []detect.Detector
 	// A missing home directory only drops the per-user socket candidates.
 	home, _ := os.UserHomeDir()
-	path := docker.FindSocket(os.Getenv("DOCKER_HOST"), home, docker.IsSocket)
-	if path == "" {
-		return fallback
+	if path := docker.FindSocket(os.Getenv("DOCKER_HOST"), home, docker.IsSocket); path != "" {
+		chain = append(chain, docker.New(docker.NewClient(path)))
 	}
-	return detect.Chain(docker.New(docker.NewClient(path)), fallback)
+	chain = append(chain, platform...)
+	return detect.Chain(append(chain, fallback)...)
 }
