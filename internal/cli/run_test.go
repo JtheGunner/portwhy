@@ -685,3 +685,59 @@ func TestRootCmd_ExpandedFlagIsParsed(t *testing.T) {
 		t.Errorf("--expanded not applied:\n%s", stdout.String())
 	}
 }
+
+func TestRun_PlainWritesOneLinePerSocket(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3001, 43), listener(3000, 42)}})
+
+	got := Run(context.Background(), d, nil, Flags{Plain: true})
+
+	if got != 0 {
+		t.Errorf("exit = %d, want 0", got)
+	}
+	want := "3000\ttcp\t127.0.0.1\t42\tprocess\tnode\n3001\ttcp\t127.0.0.1\t43\tprocess\tnode\n"
+	if stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRun_PlainFreePortPrintsNothingExit1(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Plain: true})
+
+	if got != 1 {
+		t.Errorf("exit = %d, want 1", got)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestRun_PlainWithJSONExit2(t *testing.T) {
+	d, stdout, stderr := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+
+	got := Run(context.Background(), d, []string{"3000"}, Flags{Plain: true, JSON: true})
+
+	if got != 2 {
+		t.Errorf("exit = %d, want 2", got)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "--plain and --json cannot be combined") {
+		t.Errorf("stderr = %q, want it to explain the conflict", stderr.String())
+	}
+}
+
+func TestRootCmd_PlainFlagIsParsed(t *testing.T) {
+	d, stdout, _ := testDeps(fakeSockets{sockets: []socket.Socket{listener(3000, 42)}})
+	cmd, exit := newRootCmd(d)
+	cmd.SetArgs([]string{"--plain", "3000"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if *exit != 0 || !strings.HasPrefix(stdout.String(), "3000\ttcp\t") {
+		t.Errorf("exit = %d, stdout = %q", *exit, stdout.String())
+	}
+}

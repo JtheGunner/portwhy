@@ -1,0 +1,15 @@
+22	tcp	0.0.0.0	0	process	-
+88	tcp	0.0.0.0	0	process	-
+137	tcp	0.0.0.0	0	process	-
+138	tcp	0.0.0.0	0	process	-
+445	tcp	0.0.0.0	0	process	-
+1900	udp	0.0.0.0	13250	process	Spotify
+3000	tcp	127.0.0.1	3983	process	Antigravity
+3100	tcp	127.0.0.1	3983	process	Antigravity
+3306	tcp	127.0.0.1	3983	process	Antigravity
+3890	tcp	127.0.0.1	3983	process	Antigravity
+5353	udp	0.0.0.0	13250	process	Spotify
+5432	tcp	0.0.0.0	812	docker	postgres
+9000	tcp	127.0.0.1	3884	launchd	php-fpm
+9000	tcp	127.0.0.1	5312	launchd	php-fpm
+9000	tcp	127.0.0.1	5313	launchd	php-fpm
