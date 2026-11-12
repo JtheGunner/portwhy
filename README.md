@@ -134,7 +134,7 @@ portwhy --plain | awk -F'\t' '$5 == "docker" { print $1 }'
 | :-: | --- | --- |
 | 🛑 | `-k`, `--kill` | stop the cause of a busy port after confirmation |
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
-| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
+| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (requires `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
 | 🔎 | `--source <name>` | only show ports held by this source: `docker`, `systemd`, `launchd` or `process` (repeatable, comma-separated) |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
