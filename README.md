@@ -73,7 +73,7 @@ When several processes hold the same port, each one gets its own block. Ranges a
 | :-: | --- | --- |
 | 🛑 | `-k`, `--kill` | stop the cause of a busy port after confirmation |
 | ✅ | `-y`, `--yes` | skip the confirmation prompt (requires `--kill`) |
-| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (requires `--kill`) |
+| 💥 | `--force` | send SIGKILL immediately instead of SIGTERM (only has an effect together with `--kill`) |
 | 👀 | `--dry-run` | show what `--kill` would do without doing it |
 | 🤖 | `--json` | print machine-readable JSON (`"version": 1`) |
 | 🎨 | `--no-color` | disable coloured output (`NO_COLOR` and non-TTY output are honoured too) |
