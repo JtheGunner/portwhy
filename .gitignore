@@ -1,0 +1,7 @@
+# build output
+/portwhy
+/dist/
+
+# local tooling
+.idea/
+.worktrees/
