@@ -27,6 +27,8 @@ jobs:
         run: go build ./...
       - name: Test
         run: go test ./...
+      - name: End-to-end tests
+        run: go test -tags e2e ./e2e
 
   lint:
     runs-on: ubuntu-latest

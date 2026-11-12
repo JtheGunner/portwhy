@@ -41,6 +41,18 @@ portwhy --version
 
 ---
 
+## ⌨️ Shell completion
+
+Generate a completion script for your shell:
+
+```bash
+portwhy completion bash   # or: zsh, fish
+```
+
+Run `portwhy completion <shell> --help` for the install steps of each shell.
+
+---
+
 ## 🛠️ Development
 
 Requires Go 1.27 or newer.
@@ -49,6 +61,7 @@ Requires Go 1.27 or newer.
 go build ./...
 go vet ./...
 go test ./...
+go test -tags e2e ./e2e   # end-to-end tests against real local listeners
 go run ./cmd/portwhy --version
 ```
 
