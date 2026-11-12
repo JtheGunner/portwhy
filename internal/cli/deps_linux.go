@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -24,15 +25,10 @@ const (
 // DefaultDeps wires the real Linux collectors and readers.
 func DefaultDeps() Deps {
 	procs := proc.NewReader("")
-	systemdDetector := systemd.NewDetector(
-		execx.NewRunner(systemctlQueryTimeout),
-		execx.NewRunner(systemctlStopTimeout),
-		os.Getuid(),
-	)
 	return Deps{
 		Sockets:    socket.NewCollector(""),
 		Procs:      procs,
-		Detector:   newDetector(detect.NewGeneric(procs, os.Getpid()), systemdDetector),
+		Detector:   newDetector(detect.NewGeneric(procs, os.Getpid()), systemdDetectors(procs)...),
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
 		IsTTY:      isTerminal(os.Stdout),
@@ -40,4 +36,20 @@ func DefaultDeps() Deps {
 		StdinIsTTY: isTerminal(os.Stdin),
 		Pid:        os.Getpid(),
 	}
+}
+
+// systemdDetectors returns the systemd detector. It needs portwhy's own
+// cgroup to avoid ever stopping the unit portwhy runs in; when that cannot be
+// read, the detector is left out rather than risk stopping the wrong unit.
+func systemdDetectors(procs proc.Reader) []detect.Detector {
+	self, err := procs.Read(context.Background(), os.Getpid())
+	if err != nil {
+		return nil
+	}
+	return []detect.Detector{systemd.NewDetector(
+		execx.NewRunner(systemctlQueryTimeout),
+		execx.NewRunner(systemctlStopTimeout),
+		os.Getuid(),
+		self.Cgroup,
+	)}
 }

@@ -31,7 +31,7 @@ func process(cgroup string) *proc.Process {
 }
 
 func newTestDetector(query, stop execx.Runner, uid int) *Detector {
-	d := NewDetector(query, stop, uid)
+	d := NewDetector(query, stop, uid, "")
 	d.now = func() time.Time { return time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC) }
 	return d
 }
@@ -283,5 +283,41 @@ func TestTerminator_CleansErrorText(t *testing.T) {
 	}
 	if !errors.Is(err, cause) {
 		t.Error("error does not wrap the cause")
+	}
+}
+
+func TestDetector_OwnUnitIsNotMatched(t *testing.T) {
+	// portwhy itself runs inside postgresql.service (one of its sub cgroups):
+	// stopping that unit would end portwhy and everything else in it.
+	tests := []struct {
+		name      string
+		ownCgroup string
+		cgroup    string
+		wantMatch bool
+	}{
+		{"same system unit", "/system.slice/postgresql.service", systemCgroup, false},
+		{"same system unit, own sub cgroup", "/system.slice/postgresql.service/worker", systemCgroup, false},
+		{"same user unit", userCgroup, userCgroup, false},
+		{"different system unit", "/system.slice/nginx.service", systemCgroup, true},
+		{"system and user unit of the same name differ", "/system.slice/foo.service", userCgroup, true},
+		{"own cgroup is a session scope", "/user.slice/user-1000.slice/session-3.scope", systemCgroup, true},
+		{"own cgroup unknown", "", systemCgroup, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := &execx.Fake{Responses: map[string][]byte{
+				"systemctl show -p Restart --value postgresql.service": []byte("no\n"),
+				"systemctl --user show -p Restart --value foo.service": []byte("no\n"),
+			}}
+
+			_, ok := NewDetector(query, &execx.Fake{}, 1000, tt.ownCgroup).Detect(context.Background(), testSocket, process(tt.cgroup))
+
+			if ok != tt.wantMatch {
+				t.Errorf("Detect() matched = %v, want %v", ok, tt.wantMatch)
+			}
+			if !tt.wantMatch && len(query.Calls()) != 0 {
+				t.Errorf("ran %v, want no systemctl call for the own unit", query.Calls())
+			}
+		})
 	}
 }

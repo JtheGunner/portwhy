@@ -21,14 +21,20 @@ type Detector struct {
 	query execx.Runner
 	stop  execx.Runner
 	uid   int
-	now   func() time.Time
+	// own is the unit portwhy itself runs in, or the zero value when it runs
+	// outside any service. Stopping that unit would end portwhy and everything
+	// else inside it, so it is never matched.
+	own cgroupUnit
+	now func() time.Time
 }
 
 // NewDetector returns a Detector for the user with the given uid. query runs
 // the quick systemctl lookups; stop runs "systemctl stop" and needs a much
 // longer timeout, because systemd waits for the service to shut down.
-func NewDetector(query, stop execx.Runner, uid int) *Detector {
-	return &Detector{query: query, stop: stop, uid: uid, now: time.Now}
+// ownCgroup is the cgroup path of the portwhy process itself.
+func NewDetector(query, stop execx.Runner, uid int, ownCgroup string) *Detector {
+	own, _ := unitFromCgroup(ownCgroup)
+	return &Detector{query: query, stop: stop, uid: uid, own: own, now: time.Now}
 }
 
 // Detect implements detect.Detector.
@@ -43,6 +49,12 @@ func (d *Detector) Detect(ctx context.Context, _ socket.Socket, p *proc.Process)
 	// "systemctl --user" always talks to the manager of the current user, so a
 	// unit of another user's manager can neither be queried nor stopped.
 	if unit.User && unit.UID != d.uid {
+		return nil, false
+	}
+
+	// A port held inside the unit portwhy runs in falls through to the generic
+	// detector, which stops just that process instead of the whole unit.
+	if unit == d.own {
 		return nil, false
 	}
 
