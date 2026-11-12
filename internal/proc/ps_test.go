@@ -39,6 +39,10 @@ func psKey(pid int) string {
 	return execx.Key("ps", "-o", "pid=,ppid=,user=,lstart=,command=", "-p", fmt.Sprint(pid))
 }
 
+func commKey(pid int) string {
+	return execx.Key("ps", "-o", "comm=", "-p", fmt.Sprint(pid))
+}
+
 func lsofKey(pid int) string {
 	return execx.Key("lsof", "-a", "-p", fmt.Sprint(pid), "-d", "cwd", "-Fn")
 }
@@ -48,7 +52,7 @@ func psLine(pid, ppid int, command string) []byte {
 }
 
 func TestParsePS_ParsesFields(t *testing.T) {
-	p, err := parsePS(fixture(t, "ps_one.txt"))
+	p, err := parsePS(fixture(t, "ps_one.txt"), "")
 	if err != nil {
 		t.Fatalf("parsePS: %v", err)
 	}
@@ -73,7 +77,7 @@ func TestParsePS_ParsesFields(t *testing.T) {
 }
 
 func TestParsePS_CommandWithSpaces(t *testing.T) {
-	p, err := parsePS(fixture(t, "ps_spaces.txt"))
+	p, err := parsePS(fixture(t, "ps_spaces.txt"), "")
 	if err != nil {
 		t.Fatalf("parsePS: %v", err)
 	}
@@ -93,6 +97,75 @@ func TestParsePS_CommandWithSpaces(t *testing.T) {
 	}
 }
 
+func TestParsePS_NameWithSpaces(t *testing.T) {
+	tests := map[string]struct {
+		fixture  string
+		comm     string
+		wantName string
+		wantCmd  []string
+	}{
+		"spaces": {
+			"ps_spaces.txt", "/Applications/My App.app/Contents/MacOS/My App", "My App",
+			[]string{"/Applications/My App.app/Contents/MacOS/My App", "--flag"},
+		},
+		"special characters": {
+			"ps_special.txt",
+			"/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)",
+			"Google Chrome Helper (Renderer)",
+			[]string{"/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)", "--type=renderer"},
+		},
+		"no spaces unchanged": {
+			"ps_one.txt", "/usr/local/bin/node", "node",
+			[]string{"/usr/local/bin/node", "/home/devuser/app/server.js", "--port", "3000"},
+		},
+		"comm not a prefix falls back": {
+			"ps_one.txt", "/other/path", "node",
+			[]string{"/usr/local/bin/node", "/home/devuser/app/server.js", "--port", "3000"},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			p, err := parsePS(fixture(t, tt.fixture), tt.comm)
+			if err != nil {
+				t.Fatalf("parsePS: %v", err)
+			}
+			if p.Name != tt.wantName {
+				t.Errorf("Name = %q, want %q", p.Name, tt.wantName)
+			}
+			if !slices.Equal(p.Cmdline, tt.wantCmd) {
+				t.Errorf("Cmdline = %v, want %v", p.Cmdline, tt.wantCmd)
+			}
+		})
+	}
+}
+
+func TestParsePSComm(t *testing.T) {
+	if got := parsePSComm([]byte("/Applications/LM Studio.app/Contents/MacOS/LM Studio\n")); got != "/Applications/LM Studio.app/Contents/MacOS/LM Studio" {
+		t.Errorf("comm = %q", got)
+	}
+	if got := parsePSComm(nil); got != "" {
+		t.Errorf("comm of empty output = %q, want empty", got)
+	}
+}
+
+func TestDarwinReader_NameWithSpaces(t *testing.T) {
+	comm := "/Applications/LM Studio.app/Contents/MacOS/LM Studio"
+	f := &execx.Fake{Responses: map[string][]byte{
+		psKey(70):   psLine(70, 1, comm+" --port 1234"),
+		commKey(70): []byte(comm + "\n"),
+		lsofKey(70): nil,
+		psKey(1):    psLine(1, 0, "/sbin/launchd"),
+		lsofKey(1):  nil,
+	}}
+	p, err := newPSReader(f).Read(context.Background(), 70)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if p.Name != "LM Studio" {
+		t.Errorf("Name = %q, want %q", p.Name, "LM Studio")
+	}
+}
+
 func TestParsePS_Malformed(t *testing.T) {
 	tests := map[string]string{
 		"too few fields": "12 1 devuser Thu Nov 12\n",
@@ -102,7 +175,7 @@ func TestParsePS_Malformed(t *testing.T) {
 	}
 	for name, in := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := parsePS([]byte(in))
+			_, err := parsePS([]byte(in), "")
 			if err == nil {
 				t.Fatal("parsePS returned nil error")
 			}
@@ -114,7 +187,7 @@ func TestParsePS_Malformed(t *testing.T) {
 }
 
 func TestParsePS_EmptyIsNotFound(t *testing.T) {
-	if _, err := parsePS([]byte("  \n")); !errors.Is(err, ErrNotFound) {
+	if _, err := parsePS([]byte("  \n"), ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }

@@ -56,7 +56,7 @@ func (r *psReader) readPS(ctx context.Context, pid int) (Process, error) {
 	if err != nil {
 		return Process{}, classifyPSError(pid, err)
 	}
-	p, err := parsePS(out)
+	p, err := parsePS(out, r.readComm(ctx, pid))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return Process{}, err
@@ -64,6 +64,17 @@ func (r *psReader) readPS(ctx context.Context, pid int) (Process, error) {
 		return Process{}, fmt.Errorf("read process %d: %w", pid, err)
 	}
 	return p, nil
+}
+
+// readComm returns the executable path of pid as reported by "ps -o comm=",
+// which is not split on spaces. It returns "" when ps fails, so the caller
+// falls back to the lossy whitespace split.
+func (r *psReader) readComm(ctx context.Context, pid int) string {
+	out, err := r.runner.Run(ctx, "ps", "-o", "comm=", "-p", strconv.Itoa(pid))
+	if err != nil {
+		return ""
+	}
+	return parsePSComm(out)
 }
 
 // classifyPSError maps a failed ps run to a Reader error. ps exits 1 with no
@@ -112,11 +123,16 @@ func (r *psReader) readAncestors(ctx context.Context, ppid, self int) []Ancestor
 // "ps -o pid=,ppid=,user=,lstart=,command= -p <pid>". Empty output yields
 // ErrNotFound.
 //
-// Cmdline is the command column split on whitespace. This is lossy: ps joins
-// the arguments with single spaces, so arguments that contain spaces cannot be
-// told apart from several arguments. Name is the base name of the first
-// token, so an executable path containing spaces is cut off as well.
-func parsePS(out []byte) (Process, error) {
+// comm is the executable path from "ps -o comm=" (see parsePSComm). When the
+// command column starts with it, comm is kept as the first Cmdline element and
+// Name is its base name, so executables whose path contains spaces survive.
+// With comm empty or not a prefix of the command, the first whitespace token
+// is used instead, which cuts such paths off.
+//
+// The remaining Cmdline is the command column split on whitespace. This is
+// lossy: ps joins the arguments with single spaces, so arguments that contain
+// spaces cannot be told apart from several arguments.
+func parsePS(out []byte, comm string) (Process, error) {
 	line := strings.TrimSpace(string(out))
 	if line == "" {
 		return Process{}, ErrNotFound
@@ -129,6 +145,8 @@ func parsePS(out []byte) (Process, error) {
 	if len(fields) <= psLeadingFields {
 		return Process{}, fmt.Errorf("parse ps output %q: want at least %d fields, got %d", line, psLeadingFields+1, len(fields))
 	}
+
+	command := commandColumn(line)
 
 	pid, err := strconv.Atoi(fields[0])
 	if err != nil {
@@ -145,6 +163,9 @@ func parsePS(out []byte) (Process, error) {
 	}
 
 	cmdline := fields[psLeadingFields:]
+	if rest, ok := strings.CutPrefix(command, comm); ok && comm != "" && (rest == "" || rest[0] == ' ') {
+		cmdline = append([]string{comm}, strings.Fields(rest)...)
+	}
 	return Process{
 		PID:     pid,
 		PPID:    ppid,
@@ -153,6 +174,27 @@ func parsePS(out []byte) (Process, error) {
 		Name:    filepath.Base(cmdline[0]),
 		Cmdline: cmdline,
 	}, nil
+}
+
+// commandColumn returns line without its leading psLeadingFields
+// whitespace-separated fields, with the command's own spacing intact.
+func commandColumn(line string) string {
+	rest := line
+	for range psLeadingFields {
+		rest = strings.TrimLeft(rest, " \t")
+		i := strings.IndexAny(rest, " \t")
+		if i < 0 {
+			return ""
+		}
+		rest = rest[i:]
+	}
+	return strings.TrimSpace(rest)
+}
+
+// parsePSComm parses "ps -o comm= -p <pid>" output: the first line, trimmed.
+func parsePSComm(out []byte) string {
+	line, _, _ := strings.Cut(string(out), "\n")
+	return strings.TrimSpace(line)
 }
 
 // parseLsofCwd extracts the path from "lsof -Fn" output: the first line that
