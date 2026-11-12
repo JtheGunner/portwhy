@@ -1,0 +1,5 @@
+:5432  TCP 0.0.0.0  → [32mpostgres (PID 812)[0m · Docker container "db" (postgres:16)
+       Mapping 5432→5432 · up 3 days
+       Stop: docker stop db   (restart policy "always": it comes back after a restart)
+       [33m![0m Listening on all interfaces
+       [36mi[0m Try 127.0.0.1 for local-only access

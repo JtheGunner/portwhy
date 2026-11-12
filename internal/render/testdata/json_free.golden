@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "ports": [
+    {
+      "port": 3000,
+      "state": "free",
+      "findings": []
+    }
+  ]
+}

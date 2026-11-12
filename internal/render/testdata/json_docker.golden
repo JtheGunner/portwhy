@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "ports": [
+    {
+      "port": 5432,
+      "state": "busy",
+      "findings": [
+        {
+          "protocol": "tcp",
+          "address": "0.0.0.0",
+          "pid": 812,
+          "process": {
+            "pid": 812,
+            "ppid": 1,
+            "name": "postgres",
+            "cmdline": [
+              "postgres",
+              "-D",
+              "/data"
+            ],
+            "user": "root",
+            "started": "2026-11-09T08:30:00Z",
+            "ancestors": [
+              {
+                "pid": 1,
+                "name": "init"
+              }
+            ]
+          },
+          "source": "docker",
+          "title": "Docker container \"db\" (postgres:16)",
+          "details": [
+            {
+              "key": "Mapping",
+              "value": "5432→5432"
+            },
+            {
+              "key": "up",
+              "value": "3 days"
+            }
+          ],
+          "hints": [
+            "restart policy \"always\": it comes back after a restart"
+          ],
+          "advice": [],
+          "terminate": {
+            "command": "docker stop db"
+          }
+        }
+      ]
+    },
+    {
+      "port": 3000,
+      "state": "free",
+      "findings": []
+    }
+  ]
+}
