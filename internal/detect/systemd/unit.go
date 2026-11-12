@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-const serviceSuffix = ".service"
+const (
+	serviceSuffix = ".service"
+	sliceSuffix   = ".slice"
+)
 
 // userManagerRE matches the cgroup of a per-user systemd instance. Services
 // of that instance live below it and belong to the user manager, not to the
@@ -34,8 +37,14 @@ type cgroupUnit struct {
 // "/system.slice/postgresql.service". Only *.service units match: scopes
 // (login sessions, Docker containers) and slices do not. For a path below
 // "user@<uid>.service" the first service below the user manager is returned
-// with User set. The name is validated, so a hostile directory name is not
-// matched.
+// with User set.
+//
+// systemd places a service directly below slices (or below its user manager),
+// so every component before the service must be a *.slice. Anything else, such
+// as a scope, means the directory was created by something other than systemd:
+// a container that can write its own cgroup subtree could otherwise name a
+// directory "sshd.service" and pass as a host unit. The name is validated as
+// well, so a hostile directory name is never handed to systemctl.
 func unitFromCgroup(cg string) (cgroupUnit, bool) {
 	parts := strings.Split(strings.Trim(cg, "/"), "/")
 
@@ -51,12 +60,17 @@ func unitFromCgroup(cg string) (cgroupUnit, bool) {
 				continue
 			}
 		}
-		if strings.HasSuffix(part, serviceSuffix) {
+		switch {
+		case strings.HasSuffix(part, serviceSuffix):
 			if !unitNameRE.MatchString(part) {
 				return cgroupUnit{}, false
 			}
 			result.Name = part
 			return result, true
+		case strings.HasSuffix(part, sliceSuffix):
+			continue
+		default:
+			return cgroupUnit{}, false
 		}
 	}
 	return cgroupUnit{}, false
