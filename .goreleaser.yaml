@@ -1,0 +1,47 @@
+version: 2
+project_name: portwhy
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: portwhy
+    main: ./cmd/portwhy
+    binary: portwhy
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/JtheGunner/portwhy/internal/cli.Version={{.Version}}
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+checksum:
+  name_template: checksums.txt
+changelog:
+  disable: true
+homebrew_casks:
+  - repository:
+      owner: JtheGunner
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: JtheGunner
+      email: JtheGunner@users.noreply.github.com
+    homepage: https://github.com/JtheGunner/portwhy
+    description: Explains why a local port is taken and stops the cause after confirmation
+    license: MIT
+    binaries: [portwhy]
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/portwhy"]
+          end
+release:
+  github:
+    owner: JtheGunner
+    name: portwhy
