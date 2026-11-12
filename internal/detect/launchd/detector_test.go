@@ -254,3 +254,66 @@ func TestTerminator_ErrorIsCleanedAndWrapped(t *testing.T) {
 		t.Error("error does not wrap the cause")
 	}
 }
+
+func withAncestors(p *proc.Process, ancestors ...proc.Ancestor) *proc.Process {
+	p.Ancestors = ancestors
+	return p
+}
+
+func TestDetector_WorkerOfHomebrewServiceMatchesJob(t *testing.T) {
+	worker := withAncestors(process(5312, 3884, "php-fpm:"),
+		proc.Ancestor{PID: 3884, Name: "php-fpm"}, proc.Ancestor{PID: 1, Name: "launchd"})
+
+	got, ok := newTestDetector(listRunner(t), &execx.Fake{}, testUID).Detect(context.Background(), testSocket, worker)
+
+	if !ok {
+		t.Fatal("Detect() did not match a worker of a launchd job")
+	}
+	if got.Title != `Homebrew service "php@8.4"` {
+		t.Errorf("Title = %q", got.Title)
+	}
+	if got.Terminator == nil || got.Terminator.Describe() != "brew services stop php@8.4" {
+		t.Errorf("Terminator = %v, want brew services stop php@8.4", got.Terminator)
+	}
+	if v := detail(got.Details, "Process"); v != "php-fpm: (PID 5312)" {
+		t.Errorf("Process = %q, want the worker itself", v)
+	}
+}
+
+func TestDetector_ClosestLabelledAncestorWins(t *testing.T) {
+	tests := []struct {
+		name      string
+		ancestors []proc.Ancestor
+		wantTitle string
+	}{
+		{"application between worker and job", []proc.Ancestor{{PID: 13250, Name: "Player"}, {PID: 4100, Name: "toolbox"}}, ""},
+		{"unlabelled ancestor is skipped", []proc.Ancestor{{PID: 777, Name: "sh"}, {PID: 4100, Name: "toolbox"}}, `launchd job "com.example.toolbox"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := withAncestors(process(5000, 777, "worker"), tt.ancestors...)
+
+			got, ok := newTestDetector(listRunner(t), &execx.Fake{}, testUID).Detect(context.Background(), testSocket, p)
+
+			if tt.wantTitle == "" {
+				if ok || got != nil {
+					t.Fatalf("Detect() = %v, %v, want no match", got, ok)
+				}
+				return
+			}
+			if !ok || got.Title != tt.wantTitle {
+				t.Errorf("Detect() = %v, %v, want title %q", got, ok, tt.wantTitle)
+			}
+		})
+	}
+}
+
+func TestDetector_UnlabelledChainFallsBack(t *testing.T) {
+	p := withAncestors(process(5000, 900, "x"), proc.Ancestor{PID: 900, Name: "x"}, proc.Ancestor{PID: 1, Name: "launchd"})
+
+	got, ok := newTestDetector(listRunner(t), &execx.Fake{}, testUID).Detect(context.Background(), testSocket, p)
+
+	if ok || got != nil {
+		t.Errorf("Detect() = %v, %v, want no match", got, ok)
+	}
+}
