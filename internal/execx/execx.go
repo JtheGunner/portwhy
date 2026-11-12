@@ -31,8 +31,11 @@ func NewRunner(timeout time.Duration) Runner {
 }
 
 // Run executes name with args. A failing command yields an error that includes
-// the command line and its standard error output; a command stopped by the
-// timeout or by ctx yields an error wrapping the context's error.
+// the command line and its standard error output, and any standard output the
+// command produced before failing is returned alongside it (tools such as
+// lsof exit 1 when nothing matches yet may still print partial results). A
+// command stopped by the timeout or by ctx yields an error wrapping the
+// context's error and no output.
 func (r commandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if r.timeout > 0 {
 		var cancel context.CancelFunc
@@ -52,9 +55,9 @@ func (r commandRunner) Run(ctx context.Context, name string, args ...string) ([]
 			return nil, fmt.Errorf("%s: %w", commandLine, ctxErr)
 		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return nil, fmt.Errorf("%s: %w: %s", commandLine, err, msg)
+			return stdout.Bytes(), fmt.Errorf("%s: %w: %s", commandLine, err, msg)
 		}
-		return nil, fmt.Errorf("%s: %w", commandLine, err)
+		return stdout.Bytes(), fmt.Errorf("%s: %w", commandLine, err)
 	}
 	return stdout.Bytes(), nil
 }
