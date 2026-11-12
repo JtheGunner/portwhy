@@ -3,7 +3,9 @@ package render
 import (
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/JtheGunner/portwhy/internal/detect"
 	"github.com/JtheGunner/portwhy/internal/proc"
@@ -166,5 +168,34 @@ func TestBuildOverview_SameNameDifferentSourceStaysSeparate(t *testing.T) {
 
 	if len(ov.Groups) != 2 {
 		t.Errorf("groups = %d, want 2", len(ov.Groups))
+	}
+}
+
+func TestFormatPortsWithin(t *testing.T) {
+	many := make([]uint16, 0, 100)
+	for p := uint16(3000); len(many) < 100; p += 2 {
+		many = append(many, p)
+	}
+	tests := []struct {
+		name  string
+		ports []uint16
+		width int
+		want  string
+	}{
+		{"fits", []uint16{1, 5, 9}, 20, "1, 5, 9"},
+		{"unlimited", []uint16{1, 5, 9}, 0, "1, 5, 9"},
+		{"cut", []uint16{1000, 2000, 3000, 4000, 5000}, 18, "1000, … (+4)"},
+		{"always keeps one entry", []uint16{10000, 20000}, 3, "10000, … (+1)"},
+		{"run counts all its ports", []uint16{1, 2, 3, 4, 100, 200}, 12, "1-4, … (+2)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatPortsWithin(tt.ports, tt.width); got != tt.want {
+				t.Errorf("formatPortsWithin(%v, %d) = %q, want %q", tt.ports, tt.width, got, tt.want)
+			}
+		})
+	}
+	if got := formatPortsWithin(many, 28); utf8.RuneCountInString(got) > 28 || !strings.Contains(got, "… (+") {
+		t.Errorf("100 ports within 28 = %q", got)
 	}
 }

@@ -99,3 +99,27 @@ func TestText_OverviewNeutralisesControlCharacters(t *testing.T) {
 		t.Errorf("control character in %q", out)
 	}
 }
+
+func TestText_OverviewCapsLongPortLists(t *testing.T) {
+	var fs []report.Finding
+	for p := uint16(3000); p < 3300; p += 2 {
+		fs = append(fs, finding(p, socket.TCP, "127.0.0.1", 3983, "Antigravity", detect.SourceProcess, "Antigravity"))
+	}
+	fs = append(fs, finding(80, socket.TCP, "127.0.0.1", 5, "nginx", detect.SourceProcess, "nginx"))
+	reports := reportOf(fs...)
+
+	out := string(renderOverview(t, Options{}, reports))
+	wide := string(renderOverview(t, Options{Wide: true}, reports))
+
+	for _, line := range strings.Split(out, "\n") {
+		if n := utf8.RuneCountInString(line); n > 80 {
+			t.Errorf("line of %d runes in the capped overview: %q", n, line)
+		}
+	}
+	if !strings.Contains(out, "… (+") {
+		t.Errorf("a cut port list must say how many ports are left out:\n%s", out)
+	}
+	if !strings.Contains(wide, "3298") {
+		t.Errorf("--wide must list every port:\n%s", wide)
+	}
+}

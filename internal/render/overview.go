@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/JtheGunner/portwhy/internal/detect"
 	"github.com/JtheGunner/portwhy/internal/report"
@@ -15,6 +16,8 @@ const (
 	minProcessWidth = 8
 	// maxHiddenPorts bounds the ports named in the hidden-owner summary.
 	maxHiddenPorts = 8
+	// maxPortsWidth bounds the ports column; --wide lifts the bound.
+	maxPortsWidth = 28
 
 	rowIndent  = "  "
 	columnGap  = "  "
@@ -34,11 +37,15 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 		limit = 0
 	}
 
+	portsLimit := maxPortsWidth
+	if opts.Wide {
+		portsLimit = 0
+	}
 	portsW, addrW := 0, 0
 	exposed := false
 	for _, g := range ov.Groups {
 		for _, r := range g.Rows {
-			portsW = max(portsW, len(formatPorts(r.Ports)))
+			portsW = max(portsW, utf8.RuneCountInString(formatPortsWithin(r.Ports, portsLimit)))
 			addrW = max(addrW, len(r.Addr.String()))
 			exposed = exposed || r.Exposed
 		}
@@ -47,7 +54,7 @@ func writeOverview(b *strings.Builder, reports []report.PortReport, opts Options
 	for _, g := range ov.Groups {
 		fmt.Fprintln(b, c.bold(fit(textutil.Clean(g.Title), limit)))
 		for _, r := range g.Rows {
-			ports := padRight(formatPorts(r.Ports), portsW)
+			ports := padRight(formatPortsWithin(r.Ports, portsLimit), portsW)
 			prefix := rowIndent + ports + columnGap + string(r.Protocol) + columnGap + padRight(r.Addr.String(), addrW) + columnGap + " " + columnGap
 			marker := " "
 			if r.Exposed {

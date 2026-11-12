@@ -2,6 +2,7 @@ package render
 
 import (
 	"cmp"
+	"fmt"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -140,20 +141,60 @@ func joinInts(ints []int) string {
 // formatPorts writes ascending ports comma-separated, with runs of at least
 // minRunLength consecutive ports as "first-last".
 func formatPorts(ports []uint16) string {
-	var parts []string
+	return formatPortsWithin(ports, 0)
+}
+
+// portItem is one entry of a port list: a single port or a run.
+type portItem struct {
+	text  string
+	count int
+}
+
+func portItems(ports []uint16) []portItem {
+	var items []portItem
 	for i := 0; i < len(ports); {
 		j := i
 		for j+1 < len(ports) && ports[j+1] == ports[j]+1 {
 			j++
 		}
 		if j-i+1 >= minRunLength {
-			parts = append(parts, strconv.Itoa(int(ports[i]))+"-"+strconv.Itoa(int(ports[j])))
+			items = append(items, portItem{strconv.Itoa(int(ports[i])) + "-" + strconv.Itoa(int(ports[j])), j - i + 1})
 		} else {
 			for _, p := range ports[i : j+1] {
-				parts = append(parts, strconv.Itoa(int(p)))
+				items = append(items, portItem{strconv.Itoa(int(p)), 1})
 			}
 		}
 		i = j + 1
 	}
-	return strings.Join(parts, ", ")
+	return items
+}
+
+// formatPortsWithin is formatPorts limited to width runes (0 means unlimited).
+// A list that does not fit keeps its leading entries and ends in ", … (+N)",
+// where N counts the ports left out. At least one entry is always kept.
+func formatPortsWithin(ports []uint16, width int) string {
+	items := portItems(ports)
+	texts := make([]string, len(items))
+	for i, it := range items {
+		texts[i] = it.text
+	}
+	full := strings.Join(texts, ", ")
+	if width <= 0 || len(full) <= width {
+		return full
+	}
+	shown, length := 0, 0
+	left := len(ports)
+	for i, it := range items {
+		next := length + len(it.text)
+		if i > 0 {
+			next += len(", ")
+		}
+		suffix := fmt.Sprintf(", … (+%d)", left-it.count)
+		if i > 0 && next+len(suffix) > width {
+			break
+		}
+		shown, length = i+1, next
+		left -= it.count
+	}
+	return strings.Join(texts[:shown], ", ") + fmt.Sprintf(", … (+%d)", left)
 }
