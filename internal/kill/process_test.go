@@ -418,3 +418,21 @@ func TestProcessTerminator_KillsRealChild(t *testing.T) {
 		t.Fatal("child still running after Terminate")
 	}
 }
+
+// Terminate must never escalate to SIGKILL on its own when it cannot ask, even
+// if it is called directly and not through Run.
+func TestProcessTerminator_TerminateWithoutTTYOrYesNeverEscalates(t *testing.T) {
+	sig := &fakeSignaler{diesOn: map[syscall.Signal]bool{syscall.SIGKILL: true}}
+	o, _ := options("y\n", false)
+	term := newTerminator(sig).(optionAware).withOptions(o)
+
+	err := term.Terminate(context.Background())
+
+	if !errors.Is(err, ErrNotInteractive) {
+		t.Fatalf("err = %v, want ErrNotInteractive", err)
+	}
+	got := sig.signals()
+	if len(got) != 1 || got[0] != syscall.SIGTERM {
+		t.Errorf("signals = %v, want only [SIGTERM]", got)
+	}
+}
