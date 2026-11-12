@@ -64,7 +64,7 @@ func Run(ctx context.Context, d Deps, args []string, flags Flags) int {
 		return fail(d, err)
 	}
 	if len(args) == 0 && !flags.JSON && len(reports) > 0 {
-		if err := render.Sources(d.Stdout, available); err != nil {
+		if err := render.Sources(d.Stdout, available, textOptions(d, args, flags)); err != nil {
 			return fail(d, err)
 		}
 	}
@@ -148,12 +148,17 @@ func write(d Deps, reports []report.PortReport, args []string, flags Flags, sour
 		_, err := fmt.Fprintln(d.Stdout, noBusyPortsMessage(sources))
 		return err
 	}
-	return render.Text(d.Stdout, reports, render.Options{
+	return render.Text(d.Stdout, reports, textOptions(d, args, flags))
+}
+
+// textOptions are the text layout settings for this run.
+func textOptions(d Deps, args []string, flags Flags) render.Options {
+	return render.Options{
 		Colors:   render.NewColors(d.IsTTY, flags.NoColor),
 		Width:    d.Width,
 		Wide:     flags.Wide,
 		Overview: overviewMode(args, flags.Kill),
-	})
+	}
 }
 
 // overviewMode reports whether the text output is the grouped overview: for
