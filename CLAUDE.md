@@ -38,7 +38,7 @@ go run ./cmd/portwhy 3000
 
 ## README drift check
 
-CI job `drift` (pull requests only, warn-only) runs doc-drift-checker, pinned to a version in `ci.yaml`, with `.docdrift.yaml`. A `mappings` key is the full heading text including the emoji (or the anchor); a key that matches no heading is ignored silently, so verify with `doc-drift-checker links`. `🔢 Exit codes` is deliberately unmapped (`internal/cli/run.go` changes with almost every feature). A present `ignore` key replaces the built-in list, so the defaults are repeated there; keep them in sync when upgrading the tool. Moving to `--min-severity high` is a separate decision after a few weeks of warnings.
+CI job `drift` (pull requests only, warn-only) runs doc-drift-checker, pinned to a version in `ci.yaml`, with `.docdrift.yaml`. A `mappings` key is the full heading text including the emoji (or `#` plus the anchor, e.g. `#-flags`); a key that matches no heading is ignored silently, so verify with `doc-drift-checker links`. `🔢 Exit codes` is deliberately unmapped (`internal/cli/run.go` changes with almost every feature). A present `ignore` key replaces the built-in list, so the defaults are repeated there; keep them in sync when upgrading the tool. Moving to `--min-severity high` is a separate decision after a few weeks of warnings.
 
 ## Decisions on record
 

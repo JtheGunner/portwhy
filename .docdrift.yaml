@@ -38,7 +38,8 @@ ignore:
   - "LICENSE"
   - ".github/**"
 
-# A key is the full heading text including the emoji, or the anchor (`-flags`).
+# A key is the full heading text including the emoji, or "#" plus the anchor
+# ("#-flags"). A key that matches no heading is ignored silently.
 # "🔢 Exit codes" is deliberately not mapped: the exit codes come out of
 # internal/cli/run.go, which changes with almost every feature, so a mapping
 # would report drift on changes that leave the exit codes untouched.
