@@ -1,0 +1,50 @@
+# doc-drift-checker: reports README sections whose linked code changed while the
+# section did not. Runs on pull requests in CI (job `drift`), warn-only for now.
+docs:
+  - "README.md"
+
+# A present `ignore` key replaces the built-in list, so the defaults are repeated.
+ignore:
+  # tests
+  - "**/*_test.go"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/__tests__/**"
+  - "**/testdata/**"
+  # generated code
+  - "**/*.pb.go"
+  - "**/*_gen.go"
+  - "**/*.generated.*"
+  - "**/generated/**"
+  - "**/*.min.js"
+  # lockfiles
+  - "**/go.sum"
+  - "**/package-lock.json"
+  - "**/yarn.lock"
+  - "**/pnpm-lock.yaml"
+  - "**/composer.lock"
+  - "**/Cargo.lock"
+  - "**/Gemfile.lock"
+  - "**/poetry.lock"
+  - "**/uv.lock"
+  # vendored code
+  - "**/vendor/**"
+  - "**/node_modules/**"
+  - "**/third_party/**"
+  # not described by README sections
+  - "CHANGELOG.md"
+  - "LICENSE"
+  - ".github/**"
+
+# A key is the full heading text including the emoji, or "#" plus the anchor
+# ("#-flags"). A key that matches no heading is ignored silently.
+# "🔢 Exit codes" is deliberately not mapped: the exit codes come out of
+# internal/cli/run.go, which changes with almost every feature, so a mapping
+# would report drift on changes that leave the exit codes untouched.
+mappings:
+  "🚩 Flags":
+    - "internal/cli/root.go"
+  "🛡️ Stopping safely":
+    - "internal/kill/**"

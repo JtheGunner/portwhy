@@ -40,3 +40,24 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+
+  drift:
+    # Warn-only: reports README sections whose linked code changed (see .docdrift.yaml).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          # The checker is built independently of this project's Go version.
+          go-version: stable
+      - name: Install doc-drift-checker
+        run: go install github.com/JtheGunner/doc-drift-checker/cmd/doc-drift-checker@v0.2.2
+      - name: Check README drift
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          "$(go env GOPATH)/bin/doc-drift-checker" check --base "origin/${BASE_REF}" --format github --warn-only

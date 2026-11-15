@@ -204,6 +204,8 @@ go test -tags e2e ./e2e   # end-to-end tests against real local listeners
 go run ./cmd/portwhy --version
 ```
 
+Pull requests are also checked by [doc-drift-checker](https://github.com/JtheGunner/doc-drift-checker), which warns when code linked to a README section changed but the section did not. The links live in [`.docdrift.yaml`](.docdrift.yaml); the check only warns and never fails the build.
+
 ---
 
 ## 📝 Changelog
