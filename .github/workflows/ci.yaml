@@ -51,6 +51,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
+          # The checker is built independently of this project's Go version.
           go-version: stable
       - name: Install doc-drift-checker
         run: go install github.com/JtheGunner/doc-drift-checker/cmd/doc-drift-checker@v0.2.2
